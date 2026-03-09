@@ -26,4 +26,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="UgnayDesktop.Tests\**\*.cs" />
+    <EmbeddedResource Remove="UgnayDesktop.Tests\**\*" />
+    <None Remove="UgnayDesktop.Tests\**\*" />
+  </ItemGroup>
 </Project>
+

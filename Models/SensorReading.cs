@@ -6,7 +6,9 @@ public class SensorReading
     public string DeviceId { get; set; } = "unknown";
     public DateTime ReceivedAtUtc { get; set; }
 
-    public double? FlexValue { get; set; }
+    public string? HandGesture { get; set; }
+    public double? HandGestureConfidence { get; set; }
+    public bool? HandTracked { get; set; }
 
     public double? AccelX { get; set; }
     public double? AccelY { get; set; }

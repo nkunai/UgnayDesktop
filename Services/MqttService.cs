@@ -18,8 +18,18 @@ public class MqttService
 
         _client.ApplicationMessageReceivedAsync += e =>
         {
+            var topic = e.ApplicationMessage.Topic;
             var payload = e.ApplicationMessage.ConvertPayloadToString();
-            MessageReceived?.Invoke(e.ApplicationMessage.Topic, payload);
+
+            try
+            {
+                MessageReceived?.Invoke(topic, payload);
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("MqttService", $"Message handler failed for topic '{topic}'.", ex);
+            }
+
             return Task.CompletedTask;
         };
     }
@@ -37,12 +47,14 @@ public class MqttService
             .Build();
 
         await _client.ConnectAsync(options);
+        AppLogger.Info("MqttService", $"Connected to MQTT broker {host}:{port}.");
     }
 
     public async Task SubscribeAsync(string topic, string host = "localhost", int port = 1883)
     {
         await EnsureConnectedAsync(host, port);
         await _client.SubscribeAsync(topic, MqttQualityOfServiceLevel.AtMostOnce);
+        AppLogger.Info("MqttService", $"Subscribed to topic '{topic}'.");
     }
 
     public async Task<bool> RunLoopbackTestAsync(
@@ -77,7 +89,18 @@ public class MqttService
             await _client.PublishAsync(message);
 
             var completed = await Task.WhenAny(received.Task, Task.Delay(timeoutMs));
-            return completed == received.Task && received.Task.Result;
+            var ok = completed == received.Task && received.Task.Result;
+
+            if (ok)
+            {
+                AppLogger.Info("MqttService", "Loopback test passed.");
+            }
+            else
+            {
+                AppLogger.Warning("MqttService", "Loopback test timed out.");
+            }
+
+            return ok;
         }
         finally
         {
@@ -90,6 +113,7 @@ public class MqttService
         if (_client.IsConnected)
         {
             await _client.DisconnectAsync();
+            AppLogger.Info("MqttService", "Disconnected from MQTT broker.");
         }
     }
 }

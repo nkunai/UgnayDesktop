@@ -1,43 +1,180 @@
+﻿using UgnayDesktop.Controls;
 using UgnayDesktop.Data;
 using UgnayDesktop.Models;
 using UgnayDesktop.Services;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Text.Json;
+using System.Linq;
 using System.Windows.Forms;
+using System.Drawing.Drawing2D;
 using BCrypt.Net;
 
 namespace UgnayDesktop.Forms
 {
     public partial class AdminDashboard : Form
     {
+        private const int SensorPageSize = 80;
+        private static readonly TimeSpan DeviceOnlineWindow = TimeSpan.FromSeconds(30);
+        private const string ThemeLight = "Light";
+        private const string ThemeDark = "Dark";
+
         private readonly User _currentUser;
         private readonly MqttService _mqttService = new();
+        private readonly TelemetryIngestionService _telemetryIngestion = new();
+        private readonly AlertDecisionService _alertDecisionService = new();
+        private readonly AlertOutboxService _alertOutboxService = new();
+        private readonly GestureQualityService _gestureQualityService = new();
+        private readonly ToolTip _uiToolTip = new();
+
         private int? _selectedUserId;
+
+        private string _sensorSearchTerm = string.Empty;
+        private string? _sensorStudentDeviceFilter;
+        private string _sensorGestureFilter = "All Gestures";
+        private TimeSpan? _sensorWindow = TimeSpan.FromHours(6);
+        private bool _sensorAlertOnly;
+
+        private Label? _kpiConnectedStudentsLabel;
+        private Label? _kpiActiveAlertsLabel;
+        private Label? _kpiLastGestureLabel;
+        private Label? _kpiAvgConfidenceLabel;
+
+        private TextBox? _sensorSearchTextBox;
+        private ComboBox? _sensorStudentComboBox;
+        private ComboBox? _sensorGestureComboBox;
+        private ComboBox? _sensorWindowComboBox;
+        private CheckBox? _sensorAlertOnlyCheckBox;
+
+        private Button? _sensorClearFiltersButton;
+        private Button? _alertHistoryRefreshButton;
+
+        private CheckBox? _themeToggleCheckBox;
+        private bool _isDarkTheme;
+        private bool _isThemeApplying;
+
+        private Panel? _vitalsTrendChart;
+        private Panel? _confidenceTrendChart;
+
+        private readonly System.Windows.Forms.Timer _alertHistoryRefreshTimer = new();
+        private DataGridView? _alertHistoryGrid;
+        private ComboBox? _alertHistoryStatusComboBox;
+        private Label? _alertHistoryCountLabel;
 
         public AdminDashboard(User currentUser)
         {
-            InitializeComponent();
             _currentUser = currentUser;
+            _isDarkTheme = string.Equals(_currentUser.ThemePreference, ThemeDark, StringComparison.OrdinalIgnoreCase);
+
+            InitializeComponent();
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            DoubleBuffered = true;
+            ResizeRedraw = true;
             _mqttService.MessageReceived += MqttService_MessageReceived;
+
+            CreateThemeToggleControl();
+            InitializeTelemetryInsightsUi();
+            InitializeAlertHistoryUi();
+
+            ApplyModernTheme();
+
             LoadUsers();
             LoadSensorReadings();
-            lblDecisionStatus.Text = "Decision: waiting for sensor data...";
+            lblDecisionStatus.Text = "Decision: waiting for gesture telemetry...";
             lblSelectedUser.Text = "Selected user: none";
             UpdateProfileFieldState();
             Shown += AdminDashboard_Shown;
+        }
+
+        private void ApplyModernTheme()
+        {
+            _isThemeApplying = true;
+            StartPosition = FormStartPosition.CenterScreen;
+            MinimumSize = new Size(1088, 760);
+
+            var mode = _isDarkTheme ? DashboardThemeMode.Dark : DashboardThemeMode.Light;
+            var palette = DashboardTheme.GetPalette(mode);
+
+            var secondaryButtons = new List<Button> { btnLogout };
+            if (_sensorClearFiltersButton != null)
+            {
+                secondaryButtons.Add(_sensorClearFiltersButton);
+            }
+            if (_alertHistoryRefreshButton != null)
+            {
+                secondaryButtons.Add(_alertHistoryRefreshButton);
+            }
+
+            var grids = new List<DataGridView> { dgvTeachers, dgvStudents, dgvSensorReadings };
+            if (_alertHistoryGrid != null)
+            {
+                grids.Add(_alertHistoryGrid);
+            }
+
+            DashboardTheme.Apply(
+                this,
+                primaryButtons: new[] { btnAddUser, btnUpdateUser, btnMqttTest },
+                secondaryButtons: secondaryButtons,
+                dangerButtons: new[] { btnDeleteUser },
+                grids: grids,
+                mode: mode);
+
+            labelTeachers.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold, GraphicsUnit.Point);
+            labelStudents.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold, GraphicsUnit.Point);
+
+            lblDecisionStatus.BackColor = _isDarkTheme
+                ? ColorTranslator.FromHtml("#143247")
+                : ColorTranslator.FromHtml("#EAF6FB");
+            lblDecisionStatus.Padding = new Padding(8, 4, 8, 4);
+
+            lblSelectedUser.BackColor = _isDarkTheme
+                ? ColorTranslator.FromHtml("#1A2D44")
+                : ColorTranslator.FromHtml("#EEF3F8");
+            lblSelectedUser.Padding = new Padding(8, 4, 8, 4);
+
+            txtNewPassword.UseSystemPasswordChar = true;
+
+            lblSelectedUser.AutoSize = false;
+            lblSelectedUser.AutoEllipsis = true;
+            lblSelectedUser.Size = new Size(268, 40);
+
+            lblDecisionStatus.AutoSize = false;
+            lblDecisionStatus.AutoEllipsis = true;
+            lblDecisionStatus.Size = new Size(474, 30);
+            lblDecisionStatus.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+
+            StyleKpiChip(_kpiConnectedStudentsLabel, palette);
+            StyleKpiChip(_kpiActiveAlertsLabel, palette);
+            StyleKpiChip(_kpiLastGestureLabel, palette);
+            StyleKpiChip(_kpiAvgConfidenceLabel, palette);
+
+            ApplyTrendChartTheme(_vitalsTrendChart, palette);
+            ApplyTrendChartTheme(_confidenceTrendChart, palette);
+
+            if (_themeToggleCheckBox != null)
+            {
+                _themeToggleCheckBox.Checked = _isDarkTheme;
+                _themeToggleCheckBox.ForeColor = palette.Ink;
+            }
+
+            _isThemeApplying = false;
+
+            ApplySensorGestureChipStyles();
+            ColorAlertHistoryRows();
         }
 
         private async void AdminDashboard_Shown(object? sender, EventArgs e)
         {
             try
             {
+                await _mqttService.SubscribeAsync("camera/data");
+                await _mqttService.SubscribeAsync("camera/+/data");
                 await _mqttService.SubscribeAsync("esp32/data");
                 await _mqttService.SubscribeAsync("esp32/+/data");
             }
             catch (Exception ex)
             {
+                AppLogger.Error("AdminDashboard", "MQTT subscribe failed.", ex);
                 MessageBox.Show($"MQTT subscribe failed: {ex.Message}", "MQTT", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
@@ -72,6 +209,8 @@ namespace UgnayDesktop.Forms
                 })
                 .ToList();
 
+            PopulateSensorStudentFilterOptions(db);
+
             _selectedUserId = null;
             lblSelectedUser.Text = "Selected user: none";
             dgvTeachers.ClearSelection();
@@ -83,14 +222,18 @@ namespace UgnayDesktop.Forms
         {
             using var db = new AppDbContext();
 
-            dgvSensorReadings.DataSource = db.SensorReadings
+            var utcNow = DateTime.UtcNow;
+            var filteredReadingsQuery = ApplySensorFilters(db.SensorReadings, utcNow);
+            var rows = filteredReadingsQuery
                 .OrderByDescending(r => r.ReceivedAtUtc)
-                .Take(30)
+                .Take(SensorPageSize)
                 .Select(r => new
                 {
                     r.DeviceId,
                     r.ReceivedAtUtc,
-                    Flex = r.FlexValue,
+                    HandGesture = r.HandGesture,
+                    GestureConfidence = r.HandGestureConfidence,
+                    HandTracked = r.HandTracked,
                     TempC = r.BodyTemperatureC,
                     Gsr = r.GsrValue,
                     HR = r.HeartRate,
@@ -103,12 +246,859 @@ namespace UgnayDesktop.Forms
                     Gz = r.GyroZ,
                 })
                 .ToList();
+
+            dgvSensorReadings.DataSource = rows;
+            ApplySensorGestureChipStyles();
+
+            var filteredForKpi = ApplySensorFilters(db.SensorReadings, utcNow);
+            UpdateAdminKpis(filteredForKpi);
+            UpdateAdminTrendCharts(filteredForKpi, utcNow);
+            LoadAlertHistory();
+        }
+
+        private IQueryable<SensorReading> ApplySensorFilters(IQueryable<SensorReading> query, DateTime utcNow)
+        {
+            if (_sensorWindow is TimeSpan window)
+            {
+                var startUtc = utcNow - window;
+                query = query.Where(r => r.ReceivedAtUtc >= startUtc);
+            }
+
+            if (!string.IsNullOrWhiteSpace(_sensorSearchTerm))
+            {
+                query = query.Where(r =>
+                    r.DeviceId.Contains(_sensorSearchTerm) ||
+                    (r.HandGesture != null && r.HandGesture.Contains(_sensorSearchTerm)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_sensorStudentDeviceFilter))
+            {
+                query = query.Where(r => r.DeviceId == _sensorStudentDeviceFilter);
+            }
+
+            switch (_sensorGestureFilter)
+            {
+                case "Open Palm":
+                    query = query.Where(r => r.HandGesture != null && r.HandGesture.ToLower().Contains("open"));
+                    break;
+                case "Fist":
+                    query = query.Where(r => r.HandGesture != null && r.HandGesture.ToLower().Contains("fist"));
+                    break;
+                case "No Hand":
+                    query = query.Where(r => r.HandTracked == false || r.HandGesture == null || r.HandGesture == "");
+                    break;
+            }
+
+            if (_sensorAlertOnly)
+            {
+                query = query.Where(r =>
+                    r.BodyTemperatureC > 38.0 ||
+                    r.Spo2 < 92.0 ||
+                    r.HeartRate > 120.0);
+            }
+
+            return query;
+        }
+
+        private void InitializeTelemetryInsightsUi()
+        {
+            CreateKpiCards();
+            CreateSensorFilterControls();
+            CreateTrendCharts();
+        }
+
+        private void CreateThemeToggleControl()
+        {
+            _themeToggleCheckBox = new CheckBox
+            {
+                Location = new Point(814, 17),
+                Size = new Size(123, 30),
+                Text = "Dark theme",
+                Checked = _isDarkTheme,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            };
+
+            _themeToggleCheckBox.CheckedChanged += (_, _) =>
+            {
+                if (_isThemeApplying)
+                {
+                    return;
+                }
+
+                _isDarkTheme = _themeToggleCheckBox.Checked;
+                _currentUser.ThemePreference = _isDarkTheme ? ThemeDark : ThemeLight;
+                SaveThemePreference();
+                ApplyModernTheme();
+            };
+
+            Controls.Add(_themeToggleCheckBox);
+            _themeToggleCheckBox.BringToFront();
+
+            _uiToolTip.SetToolTip(_themeToggleCheckBox, "Switch dashboard between light and dark themes.");
+        }
+
+        private void CreateKpiCards()
+        {
+            var panel = new FlowLayoutPanel
+            {
+                Location = new Point(339, 262),
+                Size = new Size(477, 32),
+                BackColor = Color.Transparent,
+                WrapContents = false,
+                FlowDirection = FlowDirection.LeftToRight,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            };
+
+            _kpiConnectedStudentsLabel = CreateKpiChip("Connected students: -", 116);
+            _kpiActiveAlertsLabel = CreateKpiChip("Active alerts: -", 108);
+            _kpiLastGestureLabel = CreateKpiChip("Last gesture: -", 118);
+            _kpiAvgConfidenceLabel = CreateKpiChip("Avg conf: -", 116);
+
+            panel.Controls.Add(_kpiConnectedStudentsLabel);
+            panel.Controls.Add(_kpiActiveAlertsLabel);
+            panel.Controls.Add(_kpiLastGestureLabel);
+            panel.Controls.Add(_kpiAvgConfidenceLabel);
+
+            Controls.Add(panel);
+            panel.BringToFront();
+        }
+
+        private void CreateSensorFilterControls()
+        {
+            _sensorSearchTextBox = new TextBox
+            {
+                Location = new Point(339, 300),
+                Size = new Size(95, 31),
+                PlaceholderText = "Search",
+            };
+            _sensorSearchTextBox.TextChanged += (_, _) =>
+            {
+                _sensorSearchTerm = _sensorSearchTextBox.Text.Trim();
+                LoadSensorReadings();
+            };
+
+            _sensorStudentComboBox = new ComboBox
+            {
+                Location = new Point(436, 300),
+                Size = new Size(85, 31),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+            };
+            _sensorStudentComboBox.SelectedIndexChanged += (_, _) =>
+            {
+                _sensorStudentDeviceFilter = _sensorStudentComboBox.SelectedValue as string;
+                LoadSensorReadings();
+            };
+
+            _sensorGestureComboBox = new ComboBox
+            {
+                Location = new Point(523, 300),
+                Size = new Size(75, 31),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+            };
+            _sensorGestureComboBox.Items.AddRange(new object[]
+            {
+                "All Gestures",
+                "Open Palm",
+                "Fist",
+                "No Hand",
+            });
+            _sensorGestureComboBox.SelectedIndex = 0;
+            _sensorGestureComboBox.SelectedIndexChanged += (_, _) =>
+            {
+                _sensorGestureFilter = _sensorGestureComboBox.SelectedItem?.ToString() ?? "All Gestures";
+                LoadSensorReadings();
+            };
+
+            _sensorWindowComboBox = new ComboBox
+            {
+                Location = new Point(600, 300),
+                Size = new Size(75, 31),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+            };
+            _sensorWindowComboBox.Items.AddRange(new object[]
+            {
+                "30m",
+                "6h",
+                "24h",
+                "All",
+            });
+            _sensorWindowComboBox.SelectedIndex = 1;
+            _sensorWindowComboBox.SelectedIndexChanged += (_, _) =>
+            {
+                _sensorWindow = _sensorWindowComboBox.SelectedIndex switch
+                {
+                    0 => TimeSpan.FromMinutes(30),
+                    1 => TimeSpan.FromHours(6),
+                    2 => TimeSpan.FromHours(24),
+                    _ => null,
+                };
+                LoadSensorReadings();
+            };
+
+            _sensorAlertOnlyCheckBox = new CheckBox
+            {
+                Location = new Point(679, 302),
+                Size = new Size(64, 28),
+                Text = "Alert",
+                AutoSize = false,
+            };
+            _sensorAlertOnlyCheckBox.CheckedChanged += (_, _) =>
+            {
+                _sensorAlertOnly = _sensorAlertOnlyCheckBox.Checked;
+                LoadSensorReadings();
+            };
+
+            _sensorClearFiltersButton = new Button
+            {
+                Location = new Point(746, 298),
+                Size = new Size(65, 35),
+                Text = "Reset",
+                UseVisualStyleBackColor = false,
+            };
+            _sensorClearFiltersButton.Click += (_, _) =>
+            {
+                _sensorSearchTextBox.Text = string.Empty;
+                _sensorStudentComboBox.SelectedIndex = 0;
+                _sensorGestureComboBox.SelectedIndex = 0;
+                _sensorWindowComboBox.SelectedIndex = 1;
+                _sensorAlertOnlyCheckBox.Checked = false;
+            };
+
+            Controls.Add(_sensorSearchTextBox);
+            Controls.Add(_sensorStudentComboBox);
+            Controls.Add(_sensorGestureComboBox);
+            Controls.Add(_sensorWindowComboBox);
+            Controls.Add(_sensorAlertOnlyCheckBox);
+            Controls.Add(_sensorClearFiltersButton);
+
+            _sensorSearchTextBox.BringToFront();
+            _sensorStudentComboBox.BringToFront();
+            _sensorGestureComboBox.BringToFront();
+            _sensorWindowComboBox.BringToFront();
+            _sensorAlertOnlyCheckBox.BringToFront();
+            _sensorClearFiltersButton.BringToFront();
+
+            _uiToolTip.SetToolTip(_sensorSearchTextBox, "Search by device or gesture.");
+            _uiToolTip.SetToolTip(_sensorStudentComboBox, "Filter readings by student device.");
+            _uiToolTip.SetToolTip(_sensorGestureComboBox, "Filter readings by gesture type.");
+            _uiToolTip.SetToolTip(_sensorWindowComboBox, "Filter readings by time range.");
+            _uiToolTip.SetToolTip(_sensorAlertOnlyCheckBox, "Show only readings that trigger an alert condition.");
+        }
+
+        private void PopulateSensorStudentFilterOptions(AppDbContext db)
+        {
+            if (_sensorStudentComboBox == null)
+            {
+                return;
+            }
+
+            var options = db.Users
+                .Where(u => u.Role == "Student" && u.DeviceId != null && u.DeviceId != "")
+                .OrderBy(u => u.FullName)
+                .Select(u => new StudentFilterOption
+                {
+                    Label = u.FullName,
+                    DeviceId = u.DeviceId,
+                })
+                .ToList();
+
+            options.Insert(0, new StudentFilterOption
+            {
+                Label = "All",
+                DeviceId = null,
+            });
+
+            _sensorStudentComboBox.DisplayMember = nameof(StudentFilterOption.Label);
+            _sensorStudentComboBox.ValueMember = nameof(StudentFilterOption.DeviceId);
+            _sensorStudentComboBox.DataSource = options;
+
+            var selected = options.FirstOrDefault(o => o.DeviceId == _sensorStudentDeviceFilter);
+            _sensorStudentComboBox.SelectedItem = selected ?? options[0];
+        }
+
+        private sealed class StudentFilterOption
+        {
+            public string Label { get; init; } = string.Empty;
+            public string? DeviceId { get; init; }
+        }
+
+        private void CreateTrendCharts()
+        {
+            _vitalsTrendChart = CreateMiniTrendChart(new Point(821, 262), new Size(255, 36));
+            _confidenceTrendChart = CreateMiniTrendChart(new Point(821, 300), new Size(255, 36));
+
+            Controls.Add(_vitalsTrendChart);
+            Controls.Add(_confidenceTrendChart);
+
+            _vitalsTrendChart.BringToFront();
+            _confidenceTrendChart.BringToFront();
+
+            _uiToolTip.SetToolTip(_vitalsTrendChart, "Vitals trend (HR / SpO2 / Temp), last 30 minutes.");
+            _uiToolTip.SetToolTip(_confidenceTrendChart, "Gesture confidence trend, last 30 minutes.");
+        }
+
+        private static Panel CreateMiniTrendChart(Point location, Size size)
+        {
+            var panel = new Panel
+            {
+                Location = location,
+                Size = size,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                BorderStyle = BorderStyle.FixedSingle,
+            };
+
+            panel.Paint += RenderMiniTrend;
+            return panel;
+        }
+
+        private sealed record TrendSeriesData(
+            string Name,
+            Color Color,
+            IReadOnlyList<(DateTime TimeUtc, double Value)> Points);
+
+        private static TrendSeriesData BuildSeriesData(
+            string name,
+            Color color,
+            IEnumerable<(DateTime TimeUtc, double? Value)> points)
+        {
+            var resolvedPoints = points
+                .Where(p => p.Value.HasValue)
+                .Select(p => (p.TimeUtc, p.Value.GetValueOrDefault()))
+                .ToList();
+
+            return new TrendSeriesData(name, color, resolvedPoints);
+        }
+
+        private static void DrawLineSeries(Panel panel, IEnumerable<TrendSeriesData> seriesData)
+        {
+            panel.Tag = seriesData.ToList();
+            panel.Invalidate();
+        }
+
+        private static void RenderMiniTrend(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel panel)
+            {
+                return;
+            }
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(panel.BackColor);
+
+            if (panel.Tag is not List<TrendSeriesData> seriesData || seriesData.Count == 0)
+            {
+                return;
+            }
+
+            var allPoints = seriesData.SelectMany(s => s.Points).ToList();
+            if (allPoints.Count < 2)
+            {
+                return;
+            }
+
+            var minX = allPoints.Min(p => p.TimeUtc.Ticks);
+            var maxX = allPoints.Max(p => p.TimeUtc.Ticks);
+            var minY = allPoints.Min(p => p.Value);
+            var maxY = allPoints.Max(p => p.Value);
+
+            if (maxX == minX)
+            {
+                maxX = minX + 1;
+            }
+
+            if (Math.Abs(maxY - minY) < 0.0001)
+            {
+                maxY = minY + 1;
+            }
+
+            var rect = panel.ClientRectangle;
+            const float pad = 3f;
+            var width = Math.Max(1f, rect.Width - (pad * 2));
+            var height = Math.Max(1f, rect.Height - (pad * 2));
+
+            foreach (var series in seriesData)
+            {
+                if (series.Points.Count < 2)
+                {
+                    continue;
+                }
+
+                using var pen = new Pen(series.Color, 1.6f);
+                var points = series.Points
+                    .Select(p => new PointF(
+                        pad + (float)((p.TimeUtc.Ticks - minX) * width / (maxX - minX)),
+                        (pad + height) - (float)((p.Value - minY) * height / (maxY - minY))))
+                    .ToArray();
+
+                e.Graphics.DrawLines(pen, points);
+            }
+        }
+
+        private void UpdateAdminTrendCharts(IQueryable<SensorReading> filteredQuery, DateTime utcNow)
+        {
+            if (_vitalsTrendChart == null || _confidenceTrendChart == null)
+            {
+                return;
+            }
+
+            var startUtc = utcNow - TimeSpan.FromMinutes(30);
+            var sample = filteredQuery
+                .Where(r => r.ReceivedAtUtc >= startUtc)
+                .OrderBy(r => r.ReceivedAtUtc)
+                .Take(360)
+                .ToList();
+
+            DrawLineSeries(
+                _vitalsTrendChart,
+                new[]
+                {
+                    BuildSeriesData("HR", ColorTranslator.FromHtml("#2563EB"), sample.Select(r => (r.ReceivedAtUtc, r.HeartRate))),
+                    BuildSeriesData("SpO2", ColorTranslator.FromHtml("#16A34A"), sample.Select(r => (r.ReceivedAtUtc, r.Spo2))),
+                    BuildSeriesData("Temp", ColorTranslator.FromHtml("#DC2626"), sample.Select(r => (r.ReceivedAtUtc, r.BodyTemperatureC))),
+                });
+
+            DrawLineSeries(
+                _confidenceTrendChart,
+                new[]
+                {
+                    BuildSeriesData("Confidence", ColorTranslator.FromHtml("#D97706"), sample.Select(r => (r.ReceivedAtUtc, r.HandGestureConfidence))),
+                });
+        }
+
+        private static void ApplyTrendChartTheme(Panel? chart, DashboardThemePalette palette)
+        {
+            if (chart == null)
+            {
+                return;
+            }
+
+            chart.BackColor = palette.Surface;
+        }
+
+        private static void StyleKpiChip(Label? label, DashboardThemePalette palette)
+        {
+            if (label == null)
+            {
+                return;
+            }
+
+            label.BackColor = palette.SurfaceMuted;
+            label.ForeColor = palette.Ink;
+        }
+
+        private void SaveThemePreference()
+        {
+            try
+            {
+                using var db = new AppDbContext();
+                var user = db.Users.FirstOrDefault(u => u.Id == _currentUser.Id);
+                if (user == null)
+                {
+                    return;
+                }
+
+                user.ThemePreference = _isDarkTheme ? ThemeDark : ThemeLight;
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning("AdminDashboard", $"Failed to save theme preference: {ex.Message}");
+            }
+        }
+
+        private void InitializeAlertHistoryUi()
+        {
+            CreateAlertHistoryControls();
+            LoadAlertHistory();
+
+            _alertHistoryRefreshTimer.Interval = 8000;
+            _alertHistoryRefreshTimer.Tick += (_, _) => LoadAlertHistory();
+            _alertHistoryRefreshTimer.Start();
+        }
+
+        private void CreateAlertHistoryControls()
+        {
+            dgvSensorReadings.Size = new Size(474, 595);
+            dgvSensorReadings.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+
+            var titleLabel = new Label
+            {
+                Location = new Point(821, 338),
+                Size = new Size(118, 30),
+                Text = "Alert History",
+                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            };
+
+            _alertHistoryStatusComboBox = new ComboBox
+            {
+                Location = new Point(941, 336),
+                Size = new Size(132, 31),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            };
+            _alertHistoryStatusComboBox.Items.AddRange(new object[]
+            {
+                "All Statuses",
+                "Pending",
+                "Processing",
+                "Failed",
+                "Sent",
+            });
+            _alertHistoryStatusComboBox.SelectedIndex = 0;
+            _alertHistoryStatusComboBox.SelectedIndexChanged += (_, _) => LoadAlertHistory();
+
+            _alertHistoryRefreshButton = new Button
+            {
+                Location = new Point(999, 970),
+                Size = new Size(77, 35),
+                Text = "Refresh",
+                UseVisualStyleBackColor = false,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
+            _alertHistoryRefreshButton.Click += (_, _) => LoadAlertHistory();
+
+            _alertHistoryGrid = new DataGridView
+            {
+                Location = new Point(821, 372),
+                Size = new Size(255, 561),
+                ReadOnly = true,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                MultiSelect = false,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                RowHeadersVisible = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
+                BorderStyle = BorderStyle.FixedSingle,
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right,
+            };
+            _alertHistoryGrid.SizeChanged += (_, _) => ApplyAlertHistoryColumnVisibility();
+
+            _alertHistoryCountLabel = new Label
+            {
+                Location = new Point(821, 936),
+                Size = new Size(168, 30),
+                Text = "0 alerts",
+                TextAlign = ContentAlignment.MiddleLeft,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            };
+
+            Controls.Add(titleLabel);
+            Controls.Add(_alertHistoryStatusComboBox);
+            Controls.Add(_alertHistoryRefreshButton);
+            Controls.Add(_alertHistoryGrid);
+            Controls.Add(_alertHistoryCountLabel);
+
+            titleLabel.BringToFront();
+            _alertHistoryStatusComboBox.BringToFront();
+            _alertHistoryRefreshButton.BringToFront();
+            _alertHistoryCountLabel.BringToFront();
+
+            _uiToolTip.SetToolTip(_alertHistoryStatusComboBox, "Filter alert history by delivery status.");
+            _uiToolTip.SetToolTip(_alertHistoryRefreshButton, "Refresh alert history now.");
+            _uiToolTip.SetToolTip(_alertHistoryGrid, "Latest alert delivery attempts from outbox.");
+        }
+
+        private void LoadAlertHistory()
+        {
+            if (_alertHistoryGrid == null || _alertHistoryStatusComboBox == null || _alertHistoryCountLabel == null)
+            {
+                return;
+            }
+
+            try
+            {
+                using var db = new AppDbContext();
+                var query = db.AlertOutboxMessages.AsQueryable();
+
+                var statusFilter = _alertHistoryStatusComboBox.SelectedItem?.ToString();
+                if (!string.IsNullOrWhiteSpace(statusFilter)
+                    && !statusFilter.StartsWith("All", StringComparison.OrdinalIgnoreCase)
+                    && Enum.TryParse<AlertOutboxStatus>(statusFilter, out var parsedStatus))
+                {
+                    query = query.Where(item => item.Status == parsedStatus);
+                }
+
+                var rows = query
+                    .OrderByDescending(item => item.CreatedAtUtc)
+                    .Take(160)
+                    .ToList()
+                    .Select(item => new
+                    {
+                        Created = item.CreatedAtUtc.ToLocalTime().ToString("g"),
+                        Device = item.DeviceId,
+                        Severity = item.Severity,
+                        Status = item.Status.ToString(),
+                        Attempts = item.AttemptCount,
+                        NextRetry = item.NextAttemptAtUtc.HasValue ? item.NextAttemptAtUtc.Value.ToLocalTime().ToString("g") : "-",
+                        Sent = item.SentAtUtc.HasValue ? item.SentAtUtc.Value.ToLocalTime().ToString("g") : "-",
+                    })
+                    .ToList();
+
+                _alertHistoryGrid.DataSource = rows;
+                FormatAlertHistoryGridColumns();
+                ApplyAlertHistoryColumnVisibility();
+                ColorAlertHistoryRows();
+                _alertHistoryCountLabel.Text = $"{rows.Count} alerts";
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Warning("AdminDashboard", $"Alert history load failed: {ex.Message}");
+            }
+        }
+
+        private void FormatAlertHistoryGridColumns()
+        {
+            if (_alertHistoryGrid == null || _alertHistoryGrid.Columns.Count == 0)
+            {
+                return;
+            }
+
+            var created = _alertHistoryGrid.Columns["Created"];
+            var device = _alertHistoryGrid.Columns["Device"];
+            var severity = _alertHistoryGrid.Columns["Severity"];
+            var status = _alertHistoryGrid.Columns["Status"];
+            var attempts = _alertHistoryGrid.Columns["Attempts"];
+            var nextRetry = _alertHistoryGrid.Columns["NextRetry"];
+            var sent = _alertHistoryGrid.Columns["Sent"];
+
+            if (created == null || device == null || severity == null || status == null || attempts == null || nextRetry == null || sent == null)
+            {
+                return;
+            }
+
+            created.DisplayIndex = 0;
+            device.DisplayIndex = 1;
+            severity.DisplayIndex = 2;
+            status.DisplayIndex = 3;
+            attempts.DisplayIndex = 4;
+            nextRetry.DisplayIndex = 5;
+            sent.DisplayIndex = 6;
+
+            created.Width = 74;
+            device.Width = 62;
+            severity.Width = 58;
+            status.Width = 64;
+            attempts.Width = 42;
+            nextRetry.Width = 90;
+            sent.Width = 78;
+        }
+
+        private void ApplyAlertHistoryColumnVisibility()
+        {
+            if (_alertHistoryGrid == null || _alertHistoryGrid.Columns.Count == 0)
+            {
+                return;
+            }
+
+            var width = _alertHistoryGrid.ClientSize.Width;
+            var attempts = _alertHistoryGrid.Columns["Attempts"];
+            var nextRetry = _alertHistoryGrid.Columns["NextRetry"];
+            var sent = _alertHistoryGrid.Columns["Sent"];
+
+            if (attempts == null || nextRetry == null || sent == null)
+            {
+                return;
+            }
+
+            attempts.Visible = width >= 250;
+            sent.Visible = width >= 320;
+            nextRetry.Visible = width >= 390;
+        }
+
+        private void ColorAlertHistoryRows()
+        {
+            if (_alertHistoryGrid == null)
+            {
+                return;
+            }
+
+            foreach (DataGridViewRow row in _alertHistoryGrid.Rows)
+            {
+                if (row.IsNewRow)
+                {
+                    continue;
+                }
+
+                var statusText = row.Cells["Status"]?.Value?.ToString() ?? string.Empty;
+                var backColor = statusText switch
+                {
+                    "Pending" => ColorTranslator.FromHtml("#FFF7DB"),
+                    "Processing" => ColorTranslator.FromHtml("#E6F0FF"),
+                    "Failed" => ColorTranslator.FromHtml("#FFE4E6"),
+                    "Sent" => ColorTranslator.FromHtml("#DCFCE7"),
+                    _ => _isDarkTheme ? ColorTranslator.FromHtml("#1A2A3F") : Color.White,
+                };
+
+                row.DefaultCellStyle.BackColor = backColor;
+                row.DefaultCellStyle.ForeColor = _isDarkTheme
+                    ? ColorTranslator.FromHtml("#E5EDF5")
+                    : ColorTranslator.FromHtml("#1E293B");
+                row.DefaultCellStyle.SelectionBackColor = ControlPaint.Dark(backColor, 0.08f);
+                row.DefaultCellStyle.SelectionForeColor = _isDarkTheme
+                    ? Color.White
+                    : ColorTranslator.FromHtml("#0F172A");
+            }
+        }
+
+        private void ApplySensorGestureChipStyles()
+        {
+            if (dgvSensorReadings.Columns.Count == 0)
+            {
+                return;
+            }
+
+            var gestureColumn = dgvSensorReadings.Columns["HandGesture"];
+            if (gestureColumn == null)
+            {
+                return;
+            }
+
+            foreach (DataGridViewRow row in dgvSensorReadings.Rows)
+            {
+                if (row.IsNewRow)
+                {
+                    continue;
+                }
+
+                var rawGesture = row.Cells["HandGesture"]?.Value?.ToString();
+                var handTrackedValue = row.Cells["HandTracked"]?.Value;
+                var handTracked = handTrackedValue as bool?;
+
+                var normalized = NormalizeGestureForChip(rawGesture, handTracked);
+                var chip = ResolveGestureChip(normalized);
+
+                row.Cells["HandGesture"].Value = chip.Text;
+                row.Cells["HandGesture"].Style.BackColor = chip.BackColor;
+                row.Cells["HandGesture"].Style.ForeColor = chip.ForeColor;
+                row.Cells["HandGesture"].Style.SelectionBackColor = ControlPaint.Dark(chip.BackColor, 0.06f);
+                row.Cells["HandGesture"].Style.SelectionForeColor = chip.ForeColor;
+            }
+        }
+
+        private static string NormalizeGestureForChip(string? gesture, bool? handTracked)
+        {
+            if (handTracked == false)
+            {
+                return "nohand";
+            }
+
+            if (string.IsNullOrWhiteSpace(gesture))
+            {
+                return "nohand";
+            }
+
+            var normalized = gesture.Trim().ToLowerInvariant();
+            if (normalized.Contains("open"))
+            {
+                return "open";
+            }
+
+            if (normalized.Contains("fist"))
+            {
+                return "fist";
+            }
+
+            return normalized;
+        }
+
+        private static (string Text, Color BackColor, Color ForeColor) ResolveGestureChip(string normalizedGesture)
+        {
+            return normalizedGesture switch
+            {
+                "open" => (
+                    "Open Palm",
+                    ColorTranslator.FromHtml("#DCFCE7"),
+                    ColorTranslator.FromHtml("#166534")),
+                "fist" => (
+                    "Fist",
+                    ColorTranslator.FromHtml("#FFEDD5"),
+                    ColorTranslator.FromHtml("#9A3412")),
+                "nohand" => (
+                    "No Hand",
+                    ColorTranslator.FromHtml("#E2E8F0"),
+                    ColorTranslator.FromHtml("#334155")),
+                _ => (
+                    normalizedGesture,
+                    ColorTranslator.FromHtml("#E0F2FE"),
+                    ColorTranslator.FromHtml("#1E3A8A")),
+            };
+        }
+
+        private void UpdateAdminKpis(IQueryable<SensorReading> filteredQuery)
+        {
+            if (_kpiConnectedStudentsLabel == null ||
+                _kpiActiveAlertsLabel == null ||
+                _kpiLastGestureLabel == null ||
+                _kpiAvgConfidenceLabel == null)
+            {
+                return;
+            }
+
+            var nowUtc = DateTime.UtcNow;
+            var sample = filteredQuery
+                .OrderByDescending(r => r.ReceivedAtUtc)
+                .Take(300)
+                .ToList();
+
+            var connectedStudents = sample
+                .Where(r => nowUtc - r.ReceivedAtUtc <= DeviceOnlineWindow)
+                .Select(r => r.DeviceId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            var latestPerDevice = sample
+                .GroupBy(r => r.DeviceId, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(r => r.ReceivedAtUtc).First());
+            var activeAlerts = latestPerDevice.Count(IsAlertCondition);
+
+            var latestGesture = sample
+                .FirstOrDefault(r => !string.IsNullOrWhiteSpace(r.HandGesture));
+
+            var avgConfidence = sample
+                .Where(r => r.HandGestureConfidence.HasValue)
+                .Select(r => r.HandGestureConfidence!.Value)
+                .DefaultIfEmpty()
+                .Average();
+
+            _kpiConnectedStudentsLabel.Text = $"Connected students: {connectedStudents}";
+            _kpiActiveAlertsLabel.Text = $"Active alerts: {activeAlerts}";
+            _kpiLastGestureLabel.Text = latestGesture == null
+                ? "Last gesture: -"
+                : $"Last gesture: {latestGesture.HandGesture}";
+            _kpiAvgConfidenceLabel.Text = avgConfidence <= 0
+                ? "Avg conf: -"
+                : $"Avg conf: {avgConfidence:0.00}";
+        }
+
+        private static bool IsAlertCondition(SensorReading reading)
+        {
+            return reading.BodyTemperatureC is > 38.0
+                || reading.Spo2 is < 92.0
+                || reading.HeartRate is > 120.0;
+        }
+
+        private static Label CreateKpiChip(string text, int width)
+        {
+            return new Label
+            {
+                Text = text,
+                Width = width,
+                Height = 32,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Margin = new Padding(0, 0, 6, 0),
+                Padding = new Padding(8, 0, 8, 0),
+                Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold, GraphicsUnit.Point),
+                BorderStyle = BorderStyle.FixedSingle,
+            };
         }
 
         private void MqttService_MessageReceived(string topic, string payload)
         {
-            if (!topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(topic, "esp32/data", StringComparison.OrdinalIgnoreCase))
+            if (!_telemetryIngestion.IsTelemetryTopic(topic))
             {
                 return;
             }
@@ -116,15 +1106,11 @@ namespace UgnayDesktop.Forms
             SensorReading reading;
             try
             {
-                reading = ParseSensorPayload(payload);
-                reading.RawJson = payload;
-
-                using var db = new AppDbContext();
-                db.SensorReadings.Add(reading);
-                db.SaveChanges();
+                reading = _telemetryIngestion.IngestPayload(payload);
             }
             catch (Exception ex)
             {
+                AppLogger.Warning("AdminDashboard", "Invalid telemetry payload.", ex, eventName: "mqtt_payload_invalid", context: new { topic, PayloadLength = payload.Length });
                 BeginInvoke(() => lblDecisionStatus.Text = $"Decision: invalid payload ({ex.Message})");
                 return;
             }
@@ -136,83 +1122,67 @@ namespace UgnayDesktop.Forms
             });
         }
 
-        private static SensorReading ParseSensorPayload(string payload)
-        {
-            using var doc = JsonDocument.Parse(payload);
-            var root = doc.RootElement;
-
-            var mpu = TryGetObject(root, "mpu6050");
-            var max = TryGetObject(root, "max30192") ?? TryGetObject(root, "max30102");
-
-            return new SensorReading
-            {
-                DeviceId = GetString(root, "deviceId") ?? "unknown",
-                ReceivedAtUtc = GetDateTime(root, "ts") ?? DateTime.UtcNow,
-                FlexValue = GetNumber(root, "flex") ?? GetNumber(root, "flexSensor"),
-                AccelX = mpu is null ? null : GetNumber(mpu.Value, "accelX"),
-                AccelY = mpu is null ? null : GetNumber(mpu.Value, "accelY"),
-                AccelZ = mpu is null ? null : GetNumber(mpu.Value, "accelZ"),
-                GyroX = mpu is null ? null : GetNumber(mpu.Value, "gyroX"),
-                GyroY = mpu is null ? null : GetNumber(mpu.Value, "gyroY"),
-                GyroZ = mpu is null ? null : GetNumber(mpu.Value, "gyroZ"),
-                HeartRate = max is null ? null : GetNumber(max.Value, "heartRate"),
-                Spo2 = max is null ? null : GetNumber(max.Value, "spo2"),
-                GsrValue = GetNumber(root, "gsr") ?? GetNumber(root, "gsrValue"),
-                BodyTemperatureC = GetNumber(root, "ds18b20") ?? GetNumber(root, "temperatureC"),
-            };
-        }
-
         private void UpdateDecisionStatus(SensorReading reading)
         {
-            var alerts = new List<string>();
+            var gestureQuality = _gestureQualityService.Evaluate(reading);
+            var gestureStatus = gestureQuality.GestureStatusText;
 
-            if (reading.BodyTemperatureC is > 38.0) alerts.Add($"High temp {reading.BodyTemperatureC:0.0}C");
-            if (reading.Spo2 is < 92.0) alerts.Add($"Low SpO2 {reading.Spo2:0.0}%");
-            if (reading.HeartRate is > 120.0) alerts.Add($"High HR {reading.HeartRate:0}");
-
-            if (alerts.Count == 0)
+            var decision = _alertDecisionService.Evaluate(reading, DateTime.UtcNow);
+            TryQueueAlertOutbox(reading, decision);
+            LoadAlertHistory();
+            if (decision.Severity == AlertSeverity.Normal)
             {
-                lblDecisionStatus.Text = $"Decision: normal ({reading.DeviceId} @ {DateTime.Now:T})";
+                lblDecisionStatus.Text = $"Decision: normal ({reading.DeviceId}, {gestureStatus} @ {DateTime.Now:T})";
                 lblDecisionStatus.ForeColor = Color.DarkGreen;
+                return;
+            }
+
+            var severityText = decision.Severity switch
+            {
+                AlertSeverity.Critical => "CRITICAL",
+                AlertSeverity.Warning => "WARNING",
+                AlertSeverity.Info => "INFO",
+                _ => "ALERT"
+            };
+
+            var color = decision.Severity switch
+            {
+                AlertSeverity.Critical => Color.DarkRed,
+                AlertSeverity.Warning => Color.DarkOrange,
+                AlertSeverity.Info => Color.SteelBlue,
+                _ => Color.DarkRed,
+            };
+
+            var detailText = string.Join("; ", decision.Messages);
+            if (decision.IsSuppressed && decision.CooldownUntilUtc is DateTime cooldownUntilUtc)
+            {
+                lblDecisionStatus.Text =
+                    $"Decision: {severityText} (cooldown until {cooldownUntilUtc.ToLocalTime():T}) - {detailText} ({reading.DeviceId}, {gestureStatus} @ {DateTime.Now:T})";
             }
             else
             {
-                lblDecisionStatus.Text = $"Decision: ALERT - {string.Join("; ", alerts)}";
-                lblDecisionStatus.ForeColor = Color.DarkRed;
+                lblDecisionStatus.Text =
+                    $"Decision: {severityText} - {detailText} ({reading.DeviceId}, {gestureStatus} @ {DateTime.Now:T})";
             }
-        }
 
-        private static JsonElement? TryGetObject(JsonElement element, string property)
+            lblDecisionStatus.ForeColor = color;
+        }
+        
+        private void TryQueueAlertOutbox(SensorReading reading, AlertDecision decision)
         {
-            if (element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object)
+            try
             {
-                return value;
+                if (_alertOutboxService.TryEnqueueFromDecision(reading, decision, nameof(AdminDashboard), out var queuedMessage)
+                    && queuedMessage != null)
+                {
+                    AppLogger.Info("AdminDashboard", "Alert queued for delivery.", eventName: "alert_outbox_queued", context: new { queuedMessage.Id, queuedMessage.Severity, queuedMessage.DeviceId });
+                }
             }
-
-            return null;
+            catch (Exception ex)
+            {
+                AppLogger.Error("AdminDashboard", "Failed to queue alert into outbox.", ex);
+            }
         }
-
-        private static double? GetNumber(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var n)) return n;
-            if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out var parsed)) return parsed;
-            return null;
-        }
-
-        private static string? GetString(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
-        }
-
-        private static DateTime? GetDateTime(JsonElement element, string property)
-        {
-            var raw = GetString(element, property);
-            if (raw == null) return null;
-            return DateTime.TryParse(raw, out var parsed) ? parsed.ToUniversalTime() : null;
-        }
-
         private void btnAddUser_Click(object sender, EventArgs e)
         {
             if (!ValidateBaseProfileFields(requirePassword: true, out var fullName, out var username, out var role, out var password)) return;
@@ -541,6 +1511,7 @@ namespace UgnayDesktop.Forms
 
             if (confirm == DialogResult.Yes)
             {
+                _alertHistoryRefreshTimer.Stop();
                 _mqttService.MessageReceived -= MqttService_MessageReceived;
                 await _mqttService.DisconnectAsync();
                 Close();
@@ -548,3 +1519,49 @@ namespace UgnayDesktop.Forms
         }
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

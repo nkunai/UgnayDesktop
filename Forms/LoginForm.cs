@@ -1,4 +1,4 @@
-using UgnayDesktop.Services;
+﻿using UgnayDesktop.Services;
 using UgnayDesktop.Models;
 using System.Drawing.Drawing2D;
 
@@ -6,11 +6,17 @@ namespace UgnayDesktop.Forms;
 
 public partial class LoginForm : Form
 {
+    private readonly AuthService _authService;
+    private readonly EmailMfaService _mfaService;
+
     public LoginForm()
     {
         InitializeComponent();
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = ColorTranslator.FromHtml("#CABA9C");
+
+        _authService = new AuthService();
+        _mfaService = new EmailMfaService(new LocalEmailVerificationSender());
 
         label1.ForeColor = ColorTranslator.FromHtml("#545454");
         label2.ForeColor = ColorTranslator.FromHtml("#545454");
@@ -59,8 +65,7 @@ public partial class LoginForm : Form
 
     private void btnLogin_Click(object sender, EventArgs e)
     {
-        var auth = new AuthService();
-        var user = auth.Login(txtUsername.Text.Trim(), txtPassword.Text.Trim());
+        var user = _authService.ValidateCredentials(txtUsername.Text.Trim(), txtPassword.Text.Trim());
 
         if (user == null)
         {
@@ -69,6 +74,111 @@ public partial class LoginForm : Form
             return;
         }
 
+        if (!CompleteMfaIfRequired(user))
+            return;
+
+        if (!CompleteMandatoryPasswordChangeIfRequired(user))
+            return;
+
+        OpenDashboard(user);
+    }
+
+    private bool CompleteMfaIfRequired(User user)
+    {
+        if (!_mfaService.IsMfaRequired(user))
+            return true;
+
+        var challenge = _mfaService.BeginChallenge(user);
+
+        if (!challenge.IsSuccess)
+        {
+            MessageBox.Show(
+                challenge.ErrorMessage + " Please contact an admin to set your email before MFA login.",
+                "MFA Not Configured",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return false;
+        }
+
+        MessageBox.Show(
+            "Verification code sent. During development, codes are also written to mfa-email-preview.log in the app folder.",
+            "Email Verification",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+
+        while (true)
+        {
+            using var verifyForm = new MfaVerificationForm(challenge.MaskedEmail, challenge.ExpiresAtUtc.ToLocalTime());
+
+            if (verifyForm.ShowDialog(this) != DialogResult.OK)
+                return false;
+
+            var verifyResult = _mfaService.VerifyCode(challenge.ChallengeId, user.Id, verifyForm.VerificationCode);
+            if (verifyResult.IsSuccess)
+                return true;
+
+            if (verifyResult.IsExpired)
+            {
+                var resend = MessageBox.Show(
+                    "Your verification code has expired. Send a new one?",
+                    "Code Expired",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (resend != DialogResult.Yes)
+                    return false;
+
+                challenge = _mfaService.BeginChallenge(user);
+                if (!challenge.IsSuccess)
+                {
+                    MessageBox.Show(challenge.ErrorMessage, "MFA Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return false;
+                }
+
+                continue;
+            }
+
+            MessageBox.Show(verifyResult.ErrorMessage, "Verification Failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+
+    private bool CompleteMandatoryPasswordChangeIfRequired(User user)
+    {
+        if (!user.MustChangePassword)
+            return true;
+
+        MessageBox.Show(
+            "You must change your default password before continuing.",
+            "Password Update Required",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+
+        while (true)
+        {
+            using var changePasswordForm = new ForcePasswordChangeForm(user.Username);
+            if (changePasswordForm.ShowDialog(this) != DialogResult.OK)
+                return false;
+
+            if (!string.Equals(changePasswordForm.NewPassword, changePasswordForm.ConfirmPassword, StringComparison.Ordinal))
+            {
+                MessageBox.Show("Passwords do not match.", "Password Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                continue;
+            }
+
+            if (!_authService.TrySetNewPassword(user.Id, changePasswordForm.NewPassword, out var errorMessage))
+            {
+                MessageBox.Show(errorMessage, "Password Update", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                continue;
+            }
+
+            user.MustChangePassword = false;
+            MessageBox.Show("Password updated successfully.", "Password Update", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return true;
+        }
+    }
+    private void OpenDashboard(User user)
+    {
         Form dashboard;
 
         if (user.Role == "Admin")
@@ -132,3 +242,7 @@ public partial class LoginForm : Form
 
     }
 }
+
+
+
+

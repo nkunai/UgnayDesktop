@@ -42,6 +42,16 @@ public class TwilioService
         return missing;
     }
 
+    public string? GetConfiguredFromPhoneNumber()
+    {
+        return GetConfigValue("TWILIO_FROM_PHONE_NUMBER");
+    }
+
+    public string? GetConfiguredAlertRecipientPhoneNumber()
+    {
+        return GetConfigValue("UGNAY_ALERT_TO_PHONE_NUMBER");
+    }
+
     public string SendSms(string fromPhoneNumber, string toPhoneNumber, string message)
     {
         var sid = GetConfigValue("TWILIO_ACCOUNT_SID");
@@ -64,7 +74,7 @@ public class TwilioService
 
     public string SendTestNotificationToTeacher(string teacherPhoneNumber, string teacherName)
     {
-        var from = GetConfigValue("TWILIO_FROM_PHONE_NUMBER");
+        var from = GetConfiguredFromPhoneNumber();
         if (string.IsNullOrWhiteSpace(from))
         {
             throw new InvalidOperationException("Missing TWILIO_FROM_PHONE_NUMBER environment variable.");
