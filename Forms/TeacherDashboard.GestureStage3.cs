@@ -5,6 +5,7 @@ namespace UgnayDesktop.Forms;
 public partial class TeacherDashboard
 {
     private GestureRuntimeService? _gestureRuntimeService;
+    private GloveSpeechService? _gloveSpeechService;
     private System.Windows.Forms.Timer? _gestureUiTimer;
     private GroupBox? _gestureGroup;
     private PictureBox? _gesturePreview;
@@ -13,10 +14,17 @@ public partial class TeacherDashboard
     private Label? _gestureModelLabel;
     private Label? _gestureMovementLabel;
     private Label? _gestureConfidenceLabel;
+    private Label? _speechStatusLabel;
     private NumericUpDown? _cameraIndexInput;
+    private TextBox? _gloveIpTextBox;
+    private CheckBox? _enableSpeechCheckBox;
     private Button? _startCameraButton;
     private Button? _stopCameraButton;
     private DateTime _lastPreviewWriteUtc = DateTime.MinValue;
+    private string? _lastObservedLabel;
+    private string? _lastSpokenLabel;
+    private int _samePredictionCount;
+    private DateTime _lastSpokenAtUtc = DateTime.MinValue;
 
     private void InitializeGestureStage3Ui()
     {
@@ -24,9 +32,7 @@ public partial class TeacherDashboard
         MinimumSize = new Size(1500, 960);
 
         btnLogout.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        btnTwilioConfigCheck.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        btnTwilioLink.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        btnTwilioTest.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+        _gloveSpeechService = new GloveSpeechService();
 
         _gestureGroup = new GroupBox
         {
@@ -84,11 +90,40 @@ public partial class TeacherDashboard
         _gestureMovementLabel = BuildStage3Label("Movement: 0.0000", 516);
         _gestureConfidenceLabel = BuildStage3Label("Confidence: 0.00", 556);
 
+        var gloveIpLabel = new Label
+        {
+            Text = "Left Glove IP",
+            Location = new Point(18, 604),
+            AutoSize = true
+        };
+
+        _gloveIpTextBox = new TextBox
+        {
+            Location = new Point(18, 632),
+            Size = new Size(180, 35),
+            Text = "192.168.1.101"
+        };
+
+        _enableSpeechCheckBox = new CheckBox
+        {
+            Location = new Point(216, 634),
+            Size = new Size(152, 30),
+            Text = "Speak to glove",
+            Checked = true
+        };
+
+        _speechStatusLabel = new Label
+        {
+            Location = new Point(18, 678),
+            Size = new Size(350, 60),
+            Text = "Speech: waiting for a stable gesture"
+        };
+
         var helperLabel = new Label
         {
-            Location = new Point(18, 604),
-            Size = new Size(350, 170),
-            Text = "This panel uses the separated stage 3 models. Static labels stay in the static model, while moving gestures like j and z stay in the motion model. Use it to judge real-time behavior before the next data collection pass."
+            Location = new Point(18, 748),
+            Size = new Size(350, 58),
+            Text = "The app speaks only after a stable recognition. Audio is synthesized on the laptop and streamed back to the left glove speaker over UDP port 5006."
         };
 
         _gestureGroup.Controls.Add(_gesturePreview);
@@ -101,6 +136,10 @@ public partial class TeacherDashboard
         _gestureGroup.Controls.Add(_gesturePredictionLabel);
         _gestureGroup.Controls.Add(_gestureMovementLabel);
         _gestureGroup.Controls.Add(_gestureConfidenceLabel);
+        _gestureGroup.Controls.Add(gloveIpLabel);
+        _gestureGroup.Controls.Add(_gloveIpTextBox);
+        _gestureGroup.Controls.Add(_enableSpeechCheckBox);
+        _gestureGroup.Controls.Add(_speechStatusLabel);
         _gestureGroup.Controls.Add(helperLabel);
         Controls.Add(_gestureGroup);
 
@@ -147,6 +186,7 @@ public partial class TeacherDashboard
         _gestureRuntimeService?.Stop();
         if (_startCameraButton != null) _startCameraButton.Enabled = true;
         if (_stopCameraButton != null) _stopCameraButton.Enabled = false;
+        if (_speechStatusLabel != null) _speechStatusLabel.Text = "Speech: stopped";
     }
 
     private void RefreshGestureStage3Ui()
@@ -164,6 +204,75 @@ public partial class TeacherDashboard
         if (_gestureConfidenceLabel != null) _gestureConfidenceLabel.Text = $"Confidence: {snapshot.Confidence:0.00} | Distance: {snapshot.Distance:0.00}";
 
         RefreshGesturePreview(snapshot.PreviewImagePath);
+        TrySpeakRecognizedGesture(snapshot);
+    }
+
+    private async void TrySpeakRecognizedGesture(GestureRuntimeSnapshot snapshot)
+    {
+        if (_gloveSpeechService == null || _enableSpeechCheckBox?.Checked != true || _gloveIpTextBox == null)
+        {
+            return;
+        }
+
+        var label = snapshot.PredictedLabel?.Trim();
+        if (string.IsNullOrWhiteSpace(label) ||
+            label.StartsWith("No hand", StringComparison.OrdinalIgnoreCase) ||
+            label.StartsWith("Waiting", StringComparison.OrdinalIgnoreCase) ||
+            snapshot.Confidence < 0.22)
+        {
+            _samePredictionCount = 0;
+            _lastObservedLabel = null;
+            return;
+        }
+
+        if (string.Equals(label, _lastObservedLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            _samePredictionCount++;
+        }
+        else
+        {
+            _lastObservedLabel = label;
+            _samePredictionCount = 1;
+        }
+
+        if (_samePredictionCount < 8)
+        {
+            if (_speechStatusLabel != null)
+            {
+                _speechStatusLabel.Text = $"Speech: stabilizing {label} ({_samePredictionCount}/8)";
+            }
+            return;
+        }
+
+        if (string.Equals(label, _lastSpokenLabel, StringComparison.OrdinalIgnoreCase) &&
+            DateTime.UtcNow - _lastSpokenAtUtc < TimeSpan.FromSeconds(3))
+        {
+            return;
+        }
+
+        try
+        {
+            if (_speechStatusLabel != null)
+            {
+                _speechStatusLabel.Text = $"Speech: sending {label} to {_gloveIpTextBox.Text.Trim()}";
+            }
+
+            await _gloveSpeechService.SpeakAsync(label, _gloveIpTextBox.Text.Trim());
+            _lastSpokenLabel = label;
+            _lastSpokenAtUtc = DateTime.UtcNow;
+
+            if (_speechStatusLabel != null)
+            {
+                _speechStatusLabel.Text = $"Speech: sent {label}";
+            }
+        }
+        catch (Exception ex)
+        {
+            if (_speechStatusLabel != null)
+            {
+                _speechStatusLabel.Text = $"Speech failed: {ex.Message}";
+            }
+        }
     }
 
     private void RefreshGesturePreview(string previewPath)
@@ -196,6 +305,9 @@ public partial class TeacherDashboard
 
         _gestureRuntimeService?.Dispose();
         _gestureRuntimeService = null;
+
+        _gloveSpeechService?.Dispose();
+        _gloveSpeechService = null;
 
         if (_gesturePreview?.Image != null)
         {
