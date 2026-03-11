@@ -31,6 +31,7 @@ namespace UgnayDesktop.Forms
             LoadStudents();
             ResetSelectedStudentDisplay();
             UpdateTeacherPhoneLabel();
+            InitializeGestureStage3Ui();
             Shown += TeacherDashboard_Shown;
         }
 
@@ -579,3 +580,4 @@ namespace UgnayDesktop.Forms
         }
     }
 }
+
