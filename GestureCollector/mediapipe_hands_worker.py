@@ -1,5 +1,6 @@
-﻿import argparse
+import argparse
 import json
+import os
 import cv2
 import mediapipe as mp
 import sys
@@ -7,7 +8,6 @@ import threading
 import queue
 
 
-# MediaPipe pose indices (BlazePose)
 L_SHOULDER = 11
 R_SHOULDER = 12
 L_ELBOW = 13
@@ -15,10 +15,8 @@ R_ELBOW = 14
 L_WRIST = 15
 R_WRIST = 16
 
-
-# Stabilization params
-SMOOTH_ALPHA = 0.35     # lower = smoother/stabler, higher = more responsive
-HAND_HOLD_FRAMES = 6    # hold last hand for brief detection drops
+SMOOTH_ALPHA = 0.35
+HAND_HOLD_FRAMES = 6
 
 
 def flatten_landmarks(hand_landmarks):
@@ -66,9 +64,20 @@ def draw_upper_body(frame, pose_landmarks):
         cv2.circle(frame, px(name), 4, (50, 255, 50), -1)
 
 
+def write_preview(frame, output_path):
+    if not output_path:
+        return
+
+    temp_path = output_path + ".tmp.jpg"
+    cv2.imwrite(temp_path, frame)
+    os.replace(temp_path, output_path)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--camera", type=int, default=0)
+    parser.add_argument("--frame-out", type=str, default="")
+    parser.add_argument("--no-window", action="store_true")
     args = parser.parse_args()
 
     mp_holistic = mp.solutions.holistic
@@ -90,8 +99,7 @@ def main():
         raise RuntimeError("Camera failed to open")
 
     show_pose_markers = True
-
-    # command queue from collector stdin IPC
+    show_window = not args.no_window
     cmd_q = queue.Queue()
 
     def stdin_reader():
@@ -109,7 +117,6 @@ def main():
     right_hold = 0
 
     while True:
-        # apply pending commands from collector
         while not cmd_q.empty():
             cmd = cmd_q.get_nowait()
             if cmd == "POSE_ON":
@@ -178,17 +185,22 @@ def main():
                 draw_upper_body(frame, result.pose_landmarks)
 
         pose_state = "ON" if show_pose_markers else "OFF"
-        cv2.putText(frame, f"Arms/Shoulders: {pose_state} (press A to toggle)", (20, 30),
+        cv2.putText(frame, f"Arms/Shoulders: {pose_state}", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
 
+        write_preview(frame, args.frame_out)
         print(json.dumps(out), flush=True)
 
-        cv2.imshow("mediapipe_hands", frame)
-        key = cv2.waitKey(1) & 0xFF
-        if key == 27:
-            break
-        if key in (ord("a"), ord("A")):
-            show_pose_markers = not show_pose_markers
+        if show_window:
+            cv2.imshow("mediapipe_hands", frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == 27:
+                break
+            if key in (ord("a"), ord("A")):
+                show_pose_markers = not show_pose_markers
+        else:
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
     cap.release()
     cv2.destroyAllWindows()
