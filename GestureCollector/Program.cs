@@ -12,6 +12,8 @@ internal static class Program
 {
     private const int LandmarkValueCount = 42; // 21 points x (x,y)
     private const int CaptureDelaySeconds = 3;
+    private const int MotionCaptureFps = 20;
+    private const int MotionCaptureSeconds = 4;
 
     public static async Task<int> Main(string[] args)
     {
@@ -45,7 +47,7 @@ internal static class Program
 
         var gestureLabel = ResolveGestureLabel(options.GestureLabel);
         Console.WriteLine($"Gesture label: {gestureLabel}");
-        Console.WriteLine("Press SPACE to record sample, G to change gesture label, R to recalibrate, ESC to quit.");
+        Console.WriteLine("Press SPACE to record sample, M for timed moving capture, T to retake last, G to change label, R to recalibrate, ESC to quit.");
 
         await RunLoopAsync(options, gestureLabel, handSource, telemetry, calibrator, cts.Token);
         return 0;
@@ -60,7 +62,7 @@ internal static class Program
         CancellationToken token)
     {
         var writeHeader = !File.Exists(options.DatasetPath) || new FileInfo(options.DatasetPath).Length == 0;
-        await using var file = new StreamWriter(options.DatasetPath, append: true, Encoding.UTF8);
+        await using var file = OpenAppendWriter(options.DatasetPath);
 
         if (writeHeader)
         {
@@ -68,10 +70,61 @@ internal static class Program
             await file.FlushAsync();
         }
 
+        var motionPath = BuildMotionPath(options.DatasetPath);
+        var writeMotionHeader = !File.Exists(motionPath) || new FileInfo(motionPath).Length == 0;
+        await using var motionFile = OpenAppendWriter(motionPath);
+        if (writeMotionHeader)
+        {
+            await motionFile.WriteLineAsync(BuildMotionHeader());
+            await motionFile.FlushAsync();
+        }
+
         var gestureLabel = initialGestureLabel;
+        var motionRecording = false;
+        var motionSequenceId = 0;
+        var motionFrameIndex = 0;
+        var motionCapturedFrames = 0;
+        var motionFramePeriodMs = 1000 / MotionCaptureFps;
+        var nextMotionCaptureAt = DateTimeOffset.MinValue;
+        var motionStopAt = DateTimeOffset.MinValue;
+        var lastCapturedWasMotion = false;
+        var lastMotionSequenceId = 0;
+        var hasStaticCapture = false;
 
         while (!token.IsCancellationRequested)
         {
+            if (motionRecording && DateTimeOffset.UtcNow >= motionStopAt)
+            {
+                motionRecording = false;
+                handSource.SetPoseMarkers(false);
+                await motionFile.FlushAsync();
+                Console.WriteLine($"motion capture finished: seq={motionSequenceId}, frames={motionCapturedFrames}");
+                if (motionCapturedFrames > 0)
+                {
+                    lastCapturedWasMotion = true;
+                    lastMotionSequenceId = motionSequenceId;
+                }
+            }
+
+            if (motionRecording && DateTimeOffset.UtcNow >= nextMotionCaptureAt)
+            {
+                if (TryBuildCommonRow(gestureLabel, handSource, telemetry, calibrator, "motion", out var motionBaseRow))
+                {
+                    var motionRow = new List<string>(2 + motionBaseRow.Count)
+                    {
+                        motionSequenceId.ToString(CultureInfo.InvariantCulture),
+                        motionFrameIndex.ToString(CultureInfo.InvariantCulture)
+                    };
+
+                    motionRow.AddRange(motionBaseRow);
+                    await motionFile.WriteLineAsync(string.Join(',', motionRow));
+                    motionFrameIndex++;
+                    motionCapturedFrames++;
+                }
+
+                nextMotionCaptureAt = DateTimeOffset.UtcNow.AddMilliseconds(motionFramePeriodMs);
+            }
+
             if (!Console.KeyAvailable)
             {
                 await Task.Delay(20, token);
@@ -93,6 +146,76 @@ internal static class Program
                 continue;
             }
 
+            if (key == ConsoleKey.M)
+            {
+                if (!motionRecording)
+                {
+                    motionRecording = true;
+                    handSource.SetPoseMarkers(true);
+                    motionSequenceId++;
+                    motionFrameIndex = 0;
+                    motionCapturedFrames = 0;
+                    Console.WriteLine("Get ready for moving capture...");
+                    await WaitForCaptureCountdownAsync(CaptureDelaySeconds, token);
+                    nextMotionCaptureAt = DateTimeOffset.UtcNow;
+                    motionStopAt = DateTimeOffset.UtcNow.AddSeconds(MotionCaptureSeconds);
+                    Console.WriteLine($"motion capture started: seq={motionSequenceId}, label={gestureLabel}");
+                }
+                else
+                {
+                    motionRecording = false;
+                    handSource.SetPoseMarkers(false);
+                    await motionFile.FlushAsync();
+                    Console.WriteLine($"motion capture stopped: seq={motionSequenceId}, frames={motionCapturedFrames}");
+                }
+                continue;
+            }
+
+            if (key == ConsoleKey.T)
+            {
+                if (motionRecording)
+                {
+                    Console.WriteLine("cannot retake while motion capture is running");
+                    continue;
+                }
+
+                Console.WriteLine("Get ready for retake...");
+                await WaitForCaptureCountdownAsync(CaptureDelaySeconds, token);
+
+                if (lastCapturedWasMotion && lastMotionSequenceId > 0)
+                {
+                    await motionFile.FlushAsync();
+                    if (RemoveMotionSequence(motionPath, lastMotionSequenceId, out var removedFrames))
+                    {
+                        Console.WriteLine($"retake ok: removed motion seq={lastMotionSequenceId}, frames={removedFrames}");
+                        lastCapturedWasMotion = false;
+                        lastMotionSequenceId = 0;
+                    }
+                    else
+                    {
+                        Console.WriteLine("retake failed: no motion sequence removed");
+                    }
+                    continue;
+                }
+
+                if (hasStaticCapture)
+                {
+                    await file.FlushAsync();
+                    if (RemoveLastStaticRow(options.DatasetPath))
+                    {
+                        Console.WriteLine("retake ok: removed last static sample");
+                        hasStaticCapture = false;
+                    }
+                    else
+                    {
+                        Console.WriteLine("retake failed: no static row removed");
+                    }
+                    continue;
+                }
+
+                Console.WriteLine("nothing to retake");
+                continue;
+            }
             if (key == ConsoleKey.R)
             {
                 Console.WriteLine("Sending CALIBRATE command to gloves...");
@@ -110,53 +233,17 @@ internal static class Program
 
             await WaitForCaptureCountdownAsync(CaptureDelaySeconds, token);
 
-            var hands = handSource.Latest;
-            if (hands == null)
+            if (!TryBuildCommonRow(gestureLabel, handSource, telemetry, calibrator, "static", out var row))
             {
-                Console.WriteLine("No MediaPipe hand frame yet. Try again.");
                 continue;
             }
-
-            var snapshot = telemetry.LatestSnapshot;
-            if (!snapshot.HasBothMpu)
-            {
-                Console.WriteLine("Need MPU data from both gloves. Try again.");
-                continue;
-            }
-
-            var leftLandmarks = Ensure42(hands.Left);
-            var rightLandmarks = Ensure42(hands.Right);
-            if (!HasAnyHandData(leftLandmarks, rightLandmarks))
-            {
-                Console.WriteLine("No hand detected in camera. Try again.");
-                continue;
-            }
-
-            var left = calibrator.ApplyLeft(snapshot.Left);
-            var right = calibrator.ApplyRight(snapshot.Right);
-
-            var row = new List<string>(1 + 42 + 42 + 3 + 3 + 1)
-            {
-                gestureLabel
-            };
-
-            AddFloats(row, leftLandmarks);
-            AddFloats(row, rightLandmarks);
-
-            row.Add(left.Roll.ToString("F6", CultureInfo.InvariantCulture));
-            row.Add(left.Pitch.ToString("F6", CultureInfo.InvariantCulture));
-            row.Add(left.Yaw.ToString("F6", CultureInfo.InvariantCulture));
-
-            row.Add(right.Roll.ToString("F6", CultureInfo.InvariantCulture));
-            row.Add(right.Pitch.ToString("F6", CultureInfo.InvariantCulture));
-            row.Add(right.Yaw.ToString("F6", CultureInfo.InvariantCulture));
-
-            row.Add(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
 
             await file.WriteLineAsync(string.Join(',', row));
             await file.FlushAsync();
 
             Console.WriteLine($"sample recorded ({gestureLabel})");
+            hasStaticCapture = true;
+            lastCapturedWasMotion = false;
         }
     }
 
@@ -227,6 +314,165 @@ internal static class Program
 
     private static bool HasAnyHandData(IReadOnlyList<float> left, IReadOnlyList<float> right) =>
         left.Any(x => !float.IsNaN(x)) || right.Any(x => !float.IsNaN(x));
+
+    private static bool TryBuildCommonRow(
+        string gestureLabel,
+        MediaPipeWorker handSource,
+        DualGloveUdpReceiver telemetry,
+        TelemetryCalibrator calibrator,
+        string captureMode,
+        out List<string> row)
+    {
+        row = new List<string>();
+
+        var hands = handSource.Latest;
+        if (hands == null)
+        {
+            Console.WriteLine("No MediaPipe hand frame yet. Try again.");
+            return false;
+        }
+
+        var snapshot = telemetry.LatestSnapshot;
+        if (!snapshot.HasBothMpu)
+        {
+            Console.WriteLine("Need MPU data from both gloves. Try again.");
+            return false;
+        }
+
+        var leftLandmarks = Ensure42(hands.Left);
+        var rightLandmarks = Ensure42(hands.Right);
+        if (!HasAnyHandData(leftLandmarks, rightLandmarks))
+        {
+            Console.WriteLine("No hand detected in camera. Try again.");
+            return false;
+        }
+
+        var left = calibrator.ApplyLeft(snapshot.Left);
+        var right = calibrator.ApplyRight(snapshot.Right);
+
+        var leftPairs = CountValidPairs(leftLandmarks);
+        var rightPairs = CountValidPairs(rightLandmarks);
+
+        row = new List<string>(1 + 42 + 42 + 3 + 3 + 1 + 7)
+        {
+            gestureLabel
+        };
+
+        AddFloats(row, leftLandmarks);
+        AddFloats(row, rightLandmarks);
+
+        row.Add(left.Roll.ToString("F6", CultureInfo.InvariantCulture));
+        row.Add(left.Pitch.ToString("F6", CultureInfo.InvariantCulture));
+        row.Add(left.Yaw.ToString("F6", CultureInfo.InvariantCulture));
+
+        row.Add(right.Roll.ToString("F6", CultureInfo.InvariantCulture));
+        row.Add(right.Pitch.ToString("F6", CultureInfo.InvariantCulture));
+        row.Add(right.Yaw.ToString("F6", CultureInfo.InvariantCulture));
+
+        row.Add(captureMode);
+        row.Add(DescribeHandPresence(leftPairs, rightPairs));
+        row.Add(leftPairs.ToString(CultureInfo.InvariantCulture));
+        row.Add(rightPairs.ToString(CultureInfo.InvariantCulture));
+        row.Add(hands.LeftHeld ? "1" : "0");
+        row.Add(hands.RightHeld ? "1" : "0");
+        row.Add("keep");
+
+        row.Add(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(CultureInfo.InvariantCulture));
+        return true;
+    }
+
+    private static string BuildMotionPath(string datasetPath)
+    {
+        var full = Path.GetFullPath(datasetPath);
+        var dir = Path.GetDirectoryName(full) ?? Directory.GetCurrentDirectory();
+        var name = Path.GetFileNameWithoutExtension(full);
+        var ext = Path.GetExtension(full);
+        return Path.Combine(dir, $"{name}_motion{ext}");
+    }
+
+    private static string BuildMotionHeader() => "sequence_id,frame_index," + BuildHeader();
+
+    private static bool RemoveLastStaticRow(string datasetPath)
+    {
+        var path = Path.GetFullPath(datasetPath);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        var lines = File.ReadAllLines(path).ToList();
+        if (lines.Count <= 1)
+        {
+            return false;
+        }
+
+        for (var i = lines.Count - 1; i >= 1; i--)
+        {
+            if (!string.IsNullOrWhiteSpace(lines[i]))
+            {
+                lines.RemoveAt(i);
+                File.WriteAllLines(path, lines);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool RemoveMotionSequence(string motionPath, int sequenceId, out int removedFrames)
+    {
+        removedFrames = 0;
+        var path = Path.GetFullPath(motionPath);
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+        var lines = File.ReadAllLines(path);
+        if (lines.Length <= 1)
+        {
+            return false;
+        }
+
+        var kept = new List<string> { lines[0] };
+        for (var i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var comma = line.IndexOf(',');
+            if (comma > 0 && int.TryParse(line.Substring(0, comma), out var seq) && seq == sequenceId)
+            {
+                removedFrames++;
+                continue;
+            }
+
+            kept.Add(line);
+        }
+
+        if (removedFrames == 0)
+        {
+            return false;
+        }
+
+        File.WriteAllLines(path, kept);
+        return true;
+    }
+
+    private static StreamWriter OpenAppendWriter(string path)
+    {
+        var stream = new FileStream(
+            path,
+            FileMode.Append,
+            FileAccess.Write,
+            FileShare.ReadWrite);
+
+        return new StreamWriter(stream, Encoding.UTF8);
+    }
+
     private static string BuildHeader()
     {
         var cols = new List<string> { "label" };
@@ -251,6 +497,14 @@ internal static class Program
         cols.Add("right_pitch");
         cols.Add("right_yaw");
 
+        cols.Add("capture_mode");
+        cols.Add("hand_presence");
+        cols.Add("left_points_visible");
+        cols.Add("right_points_visible");
+        cols.Add("left_fallback_used");
+        cols.Add("right_fallback_used");
+        cols.Add("curation_action");
+
         cols.Add("timestamp_unix_ms");
 
         return string.Join(',', cols);
@@ -272,6 +526,43 @@ internal static class Program
         {
             row.Add(float.IsNaN(value) ? "" : value.ToString("F6", CultureInfo.InvariantCulture));
         }
+    }
+
+    private static int CountValidPairs(IReadOnlyList<float> values)
+    {
+        var count = 0;
+        for (var i = 0; i + 1 < values.Count; i += 2)
+        {
+            if (!float.IsNaN(values[i]) && !float.IsNaN(values[i + 1]))
+            {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static string DescribeHandPresence(int leftPairs, int rightPairs)
+    {
+        var leftVisible = leftPairs > 0;
+        var rightVisible = rightPairs > 0;
+
+        if (leftVisible && rightVisible)
+        {
+            return "both";
+        }
+
+        if (leftVisible)
+        {
+            return "left_only";
+        }
+
+        if (rightVisible)
+        {
+            return "right_only";
+        }
+
+        return "none";
     }
 }
 
@@ -352,6 +643,7 @@ internal sealed class MediaPipeWorker : IDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             CreateNoWindow = true
         };
 
@@ -396,6 +688,24 @@ internal sealed class MediaPipeWorker : IDisposable
                 }
             }
         });
+    }
+
+    public void SetPoseMarkers(bool enabled)
+    {
+        if (_process is null || _process.HasExited)
+        {
+            return;
+        }
+
+        try
+        {
+            _process.StandardInput.WriteLine(enabled ? "POSE_ON" : "POSE_OFF");
+            _process.StandardInput.Flush();
+        }
+        catch
+        {
+            // ignore IPC write failures
+        }
     }
 
     public void Dispose()
@@ -577,7 +887,6 @@ internal sealed class DualGloveUdpReceiver : IDisposable
         values = tmp;
         return true;
     }
-
     public void Dispose()
     {
         _udp.Dispose();
@@ -623,7 +932,7 @@ internal sealed class TelemetryCalibrator
             else if (lastProgressAt.Elapsed > TimeSpan.FromSeconds(25))
             {
                 Console.WriteLine();
-                throw new InvalidOperationException(
+                    throw new InvalidOperationException(
                     "No MPU telemetry received after CALIBRATE command. " +
                     "Check glove IPs/port and confirm both boards are connected to Wi-Fi.");
             }
@@ -677,6 +986,12 @@ internal sealed class HandFrame
 
     [JsonPropertyName("right")]
     public List<float>? Right { get; set; }
+
+    [JsonPropertyName("left_held")]
+    public bool LeftHeld { get; set; }
+
+    [JsonPropertyName("right_held")]
+    public bool RightHeld { get; set; }
 }
 
 internal readonly record struct LeftGloveData(float Roll, float Pitch, float Yaw, bool Valid);
@@ -689,6 +1004,38 @@ internal sealed class TelemetrySnapshot
 
     public bool HasBothMpu => Left.Valid && Right.Valid;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
