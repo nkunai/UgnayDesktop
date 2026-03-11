@@ -4,7 +4,7 @@ Gesture motion training report
 Labels: 28
 Train sequences: 339
 Test sequences: 99
-Accuracy: 47.47%
+Accuracy: 51.52%
 
 Labels used:
 - ako
@@ -37,31 +37,31 @@ Labels used:
 - z
 
 Confusion summary:
-- ako -> ako:2, araw:1, hapon:1
-- ano -> z:1
-- araw -> araw:1, kahapon:1, sino:1, tara:1
-- bukas -> z:2, sino:1
-- gabi -> gabi:2, hapon:2
-- ganda -> ganda:2, mamaya:1, tanghali:1, tara:1
-- hapon -> gabi:1, hapon:1, pakiusap:1, salamat:1
-- hindi -> ano:1, naintindihan:1
+- ako -> ako:1, j:1, tanghali:1, ulit:1
+- ano -> oo:1
+- araw -> araw:4
+- bukas -> gabi:1, pangalan:1, z:1
+- gabi -> gabi:3, ulit:1
+- ganda -> ganda:4, kain:1
+- hapon -> gabi:2, hapon:2
+- hindi -> oo:1, z:1
 - j -> j:3
-- kahapon -> tara:2
-- kain -> ano:1, mamaya:1, tanghali:1, tara:1
-- magandang -> magandang:3, pangalan:1
-- mamaya -> mamaya:5, sino:1, tara:1
-- naintindihan -> tara:2
-- ngayon -> ngayon:2, siguro:1
-- oo -> ano:1, z:1
-- pakiusap -> pasensya:1
-- pangalan -> magandang:1, ngayon:1, pangalan:1
+- kahapon -> gabi:1, tara:1
+- kain -> tara:3, pakiusap:1
+- magandang -> magandang:2, pangalan:2
+- mamaya -> mamaya:5, araw:1, sino:1
+- naintindihan -> naintindihan:1, tara:1
+- ngayon -> ngayon:2, pangalan:1
+- oo -> sino:2
+- pakiusap -> gabi:1
+- pangalan -> pangalan:2, magandang:1
 - pasensya -> pasensya:4
-- salamat -> ngayon:2, salamat:2
-- sandali -> pakiusap:1
-- siguro -> pasensya:2, magandang:1, ngayon:1
-- sino -> sino:6, naintindihan:1, ulit:1
-- tanghali -> tanghali:4, hapon:1, pangalan:1, tara:1, ulit:1
+- salamat -> salamat:2, hapon:1, ngayon:1
+- sandali -> tanghali:1
+- siguro -> pangalan:2, hapon:1, salamat:1
+- sino -> sino:5, j:1, naintindihan:1, tanghali:1
+- tanghali -> tanghali:4, hapon:2, ano:1, bukas:1
 - tara -> tara:2
-- ulit -> ulit:2, gabi:1, magandang:1
-- walang_anuman -> walang_anuman:3, sino:1
+- ulit -> ano:2, hapon:1, magandang:1
+- walang_anuman -> walang_anuman:3, pasensya:1
 - z -> z:2
