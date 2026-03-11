@@ -9,6 +9,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="GestureCollector\**\*.cs" />
+    <Compile Remove="GestureTrainer\**\*.cs" />
+    <EmbeddedResource Remove="GestureCollector\**\*" />
+    <EmbeddedResource Remove="GestureTrainer\**\*" />
+    <None Remove="GestureCollector\**\*" />
+    <None Remove="GestureTrainer\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
@@ -22,6 +31,21 @@
 
   <ItemGroup>
     <None Update="Assets\Images\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GestureCollector\mediapipe_hands_worker.py" Link="mediapipe_hands_worker.py">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GestureTrainer\artifacts\gesture_static_separated_model.json" Link="gesture_static_separated_model.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GestureTrainer\artifacts\gesture_motion_separated_model.json" Link="gesture_motion_separated_model.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GestureTrainer\artifacts\gesture_static_model.json" Link="gesture_static_model.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="GestureTrainer\artifacts\gesture_motion_model.json" Link="gesture_motion_model.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
