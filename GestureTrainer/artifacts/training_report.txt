@@ -1,0 +1,77 @@
+Gesture training report
+=======================
+
+Labels: 33
+Train rows: 229
+Test rows: 70
+Accuracy: 38.57%
+
+Labels used:
+- a
+- ako
+- b
+- c
+- d
+- e
+- f
+- g
+- gabi
+- h
+- i
+- ikaw
+- k
+- kain
+- l
+- m
+- mahal kita
+- n
+- o
+- p
+- pangalan
+- q
+- r
+- s
+- sandali
+- t
+- tanghali
+- u
+- ulit
+- v
+- w
+- x
+- y
+
+Confusion summary:
+- a -> a:1, c:1
+- ako -> m:2, c:1
+- b -> a:1, b:1
+- c -> l:2, sandali:1
+- d -> l:1, mahal kita:1, sandali:1
+- e -> e:1, l:1
+- f -> f:2, w:1
+- g -> g:2, m:1
+- gabi -> gabi:1, kain:1, pangalan:1
+- h -> q:1, v:1
+- i -> l:1, y:1
+- ikaw -> ikaw:5
+- k -> k:1, y:1
+- kain -> pangalan:1
+- l -> y:2
+- m -> l:2
+- mahal kita -> l:2
+- n -> l:1, n:1
+- o -> o:2
+- p -> m:1, n:1, p:1
+- pangalan -> pangalan:2
+- q -> q:1
+- r -> e:2, u:1
+- s -> m:1, s:1, y:1
+- sandali -> b:1
+- t -> t:2
+- tanghali -> sandali:2, a:1
+- u -> u:1
+- ulit -> ikaw:1
+- v -> u:1
+- w -> w:1
+- x -> t:1
+- y -> y:1
