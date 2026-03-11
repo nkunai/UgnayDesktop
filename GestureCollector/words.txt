@@ -1,0 +1,64 @@
+pasensya
+kamusta
+magandang araw, hapon, gabi 3X
+ulit
+pangalan
+walang anuman
+anong pangalan 
+ano
+alphabet
+pakiusap
+ako
+mahal kita
+tara
+kain
+sandali
+oo
+hindi
+naiintindihan
+siguro
+salamat
+sino
+ngayon
+mamaya
+kahapon
+bukas
+sino
+kailan
+ganda
+
+$port = 5005
+$leftIp = "192.168.1.182"
+$rightIp = "192.168.1.187"
+
+try {
+    $listener = New-Object System.Net.Sockets.UdpClient($port)
+} catch {
+    Write-Host "UDP port $port is already in use."
+    return
+}
+
+$listener.Client.ReceiveTimeout = 1000
+
+$sender = New-Object System.Net.Sockets.UdpClient
+$bytes = [System.Text.Encoding]::UTF8.GetBytes("CALIBRATE`n")
+
+$sender.Send($bytes, $bytes.Length, $leftIp, $port) | Out-Null
+$sender.Send($bytes, $bytes.Length, $rightIp, $port) | Out-Null
+
+Write-Host "Listening on UDP $port ..."
+Write-Host "Sent CALIBRATE to $leftIp and $rightIp"
+Write-Host "Press Ctrl+C to stop"
+Write-Host ""
+
+while ($true) {
+    try {
+        $remote = New-Object System.Net.IPEndPoint([System.Net.IPAddress]::Any, 0)
+        $data = $listener.Receive([ref]$remote)
+        $text = [System.Text.Encoding]::UTF8.GetString($data)
+        $time = Get-Date -Format "HH:mm:ss"
+        Write-Host "[$time] $($remote.Address): $text"
+    }
+    catch [System.Net.Sockets.SocketException] {
+    }
+}
