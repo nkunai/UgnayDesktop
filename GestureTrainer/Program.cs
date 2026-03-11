@@ -192,7 +192,7 @@ internal static class DatasetInspector
             throw new InvalidOperationException("Dataset is empty.");
         }
 
-        var headers = headerLine.Split(',');
+        var headers = headerLine.Split(',').Select(h => h.Trim().Trim('"')).ToArray();
         var hasSequenceColumns = headers.Any(h => string.Equals(h, "sequence_id", StringComparison.OrdinalIgnoreCase))
             && headers.Any(h => string.Equals(h, "frame_index", StringComparison.OrdinalIgnoreCase));
 
@@ -219,7 +219,7 @@ internal static class StaticDatasetLoader
             throw new InvalidOperationException("Dataset is empty.");
         }
 
-        var headers = lines[0].Split(',');
+        var headers = lines[0].Split(',').Select(h => h.Trim().Trim('"')).ToArray();
         var featureIndexes = new List<int>();
         var featureNames = new List<string>();
         var labelIndex = Array.FindIndex(headers, h => string.Equals(h, "label", StringComparison.OrdinalIgnoreCase));
@@ -329,7 +329,7 @@ internal static class MotionDatasetLoader
             throw new InvalidOperationException("Dataset is empty.");
         }
 
-        var headers = headerLine.Split(',');
+        var headers = headerLine.Split(',').Select(h => h.Trim().Trim('"')).ToArray();
         var sequenceIndex = Array.FindIndex(headers, h => string.Equals(h, "sequence_id", StringComparison.OrdinalIgnoreCase));
         var labelIndex = Array.FindIndex(headers, h => string.Equals(h, "label", StringComparison.OrdinalIgnoreCase));
         var curationIndex = Array.FindIndex(headers, h => string.Equals(h, "curation_action", StringComparison.OrdinalIgnoreCase));
@@ -706,5 +706,6 @@ internal static class ReportBuilder
         return string.Join(Environment.NewLine, lines);
     }
 }
+
 
 
