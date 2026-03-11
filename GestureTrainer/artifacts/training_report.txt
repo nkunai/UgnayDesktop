@@ -4,7 +4,7 @@ Gesture training report
 Labels: 33
 Train rows: 229
 Test rows: 70
-Accuracy: 38.57%
+Accuracy: 45.71%
 
 Labels used:
 - a
@@ -42,36 +42,36 @@ Labels used:
 - y
 
 Confusion summary:
-- a -> a:1, c:1
-- ako -> m:2, c:1
-- b -> a:1, b:1
-- c -> l:2, sandali:1
-- d -> l:1, mahal kita:1, sandali:1
-- e -> e:1, l:1
-- f -> f:2, w:1
-- g -> g:2, m:1
-- gabi -> gabi:1, kain:1, pangalan:1
-- h -> q:1, v:1
-- i -> l:1, y:1
+- a -> a:2
+- ako -> ako:1, m:1, pangalan:1
+- b -> a:1, w:1
+- c -> e:1, f:1, mahal kita:1
+- d -> e:1, mahal kita:1, tanghali:1
+- e -> e:2
+- f -> f:1, mahal kita:1, w:1
+- g -> g:3
+- gabi -> ikaw:2, pangalan:1
+- h -> h:2
+- i -> e:1, l:1
 - ikaw -> ikaw:5
-- k -> k:1, y:1
-- kain -> pangalan:1
-- l -> y:2
-- m -> l:2
-- mahal kita -> l:2
-- n -> l:1, n:1
+- k -> m:1, w:1
+- kain -> mahal kita:1
+- l -> l:1, y:1
+- m -> m:2
+- mahal kita -> ikaw:1, l:1
+- n -> h:1, n:1
 - o -> o:2
-- p -> m:1, n:1, p:1
+- p -> p:2, h:1
 - pangalan -> pangalan:2
 - q -> q:1
-- r -> e:2, u:1
-- s -> m:1, s:1, y:1
-- sandali -> b:1
-- t -> t:2
-- tanghali -> sandali:2, a:1
-- u -> u:1
-- ulit -> ikaw:1
+- r -> l:2, v:1
+- s -> m:1, s:1, v:1
+- sandali -> pangalan:1
+- t -> t:1, v:1
+- tanghali -> a:1, f:1, tanghali:1
+- u -> w:1
+- ulit -> pangalan:1
 - v -> u:1
-- w -> w:1
-- x -> t:1
+- w -> u:1
+- x -> x:1
 - y -> y:1
