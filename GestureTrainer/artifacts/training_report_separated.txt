@@ -1,0 +1,63 @@
+Gesture training report
+=======================
+
+Labels: 26
+Train rows: 188
+Test rows: 56
+Accuracy: 42.86%
+
+Labels used:
+- a
+- b
+- c
+- d
+- e
+- f
+- g
+- h
+- i
+- ikaw
+- k
+- l
+- m
+- mahal kita
+- n
+- o
+- p
+- q
+- r
+- s
+- t
+- u
+- v
+- w
+- x
+- y
+
+Confusion summary:
+- a -> a:1, e:1
+- b -> a:1, w:1
+- c -> e:1, f:1, mahal kita:1
+- d -> e:2, mahal kita:1
+- e -> e:1, mahal kita:1
+- f -> f:2, e:1
+- g -> g:3
+- h -> p:1, q:1
+- i -> e:2
+- ikaw -> ikaw:4, r:1
+- k -> m:1, u:1
+- l -> l:1, mahal kita:1
+- m -> m:1, mahal kita:1
+- mahal kita -> ikaw:1, mahal kita:1
+- n -> e:1, y:1
+- o -> o:2
+- p -> p:3
+- q -> q:1
+- r -> f:1, l:1, m:1
+- s -> m:3
+- t -> t:1, u:1
+- u -> v:1
+- v -> v:1
+- w -> u:1
+- x -> x:1
+- y -> y:1
