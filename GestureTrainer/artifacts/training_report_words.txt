@@ -1,0 +1,29 @@
+Gesture training report
+=======================
+
+Labels: 9
+Train rows: 65
+Test rows: 21
+Accuracy: 42.86%
+
+Labels used:
+- ako
+- gabi
+- ikaw
+- kain
+- mahal kita
+- pangalan
+- sandali
+- tanghali
+- ulit
+
+Confusion summary:
+- ako -> ako:1, mahal kita:1, ulit:1
+- gabi -> pangalan:2, gabi:1
+- ikaw -> ikaw:4, sandali:1
+- kain -> ikaw:1
+- mahal kita -> ikaw:1, mahal kita:1
+- pangalan -> pangalan:2
+- sandali -> pangalan:1
+- tanghali -> ulit:2, sandali:1
+- ulit -> ikaw:1
