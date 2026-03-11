@@ -1,0 +1,67 @@
+Gesture motion training report
+==============================
+
+Labels: 28
+Train sequences: 339
+Test sequences: 99
+Accuracy: 48.48%
+
+Labels used:
+- ako
+- ano
+- araw
+- bukas
+- gabi
+- ganda
+- hapon
+- hindi
+- j
+- kahapon
+- kain
+- magandang
+- mamaya
+- naintindihan
+- ngayon
+- oo
+- pakiusap
+- pangalan
+- pasensya
+- salamat
+- sandali
+- siguro
+- sino
+- tanghali
+- tara
+- ulit
+- walang_anuman
+- z
+
+Confusion summary:
+- ako -> ako:1, araw:1, hapon:1, j:1
+- ano -> sino:1
+- araw -> araw:2, tara:2
+- bukas -> sino:1, tara:1, z:1
+- gabi -> gabi:2, hapon:2
+- ganda -> ganda:4, tara:1
+- hapon -> hapon:2, gabi:1, salamat:1
+- hindi -> ano:1, z:1
+- j -> j:3
+- kahapon -> tanghali:1, tara:1
+- kain -> mamaya:1, naintindihan:1, tara:1, ulit:1
+- magandang -> magandang:2, pangalan:1, tanghali:1
+- mamaya -> mamaya:3, pangalan:2, magandang:1, ulit:1
+- naintindihan -> naintindihan:1, tara:1
+- ngayon -> ngayon:3
+- oo -> ano:1, sino:1
+- pakiusap -> gabi:1
+- pangalan -> pangalan:2, magandang:1
+- pasensya -> pasensya:4
+- salamat -> magandang:2, gabi:1, salamat:1
+- sandali -> tanghali:1
+- siguro -> ano:1, gabi:1, pangalan:1, ulit:1
+- sino -> sino:6, araw:1, tanghali:1
+- tanghali -> tanghali:6, araw:1, tara:1
+- tara -> tara:2
+- ulit -> magandang:2, gabi:1, salamat:1
+- walang_anuman -> pasensya:2, walang_anuman:2
+- z -> z:2
