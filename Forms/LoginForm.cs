@@ -6,6 +6,9 @@ namespace UgnayDesktop.Forms;
 
 public partial class LoginForm : Form
 {
+    private const string Stage3Username = "stage3";
+    private const string Stage3Password = "stage3";
+
     public LoginForm()
     {
         InitializeComponent();
@@ -30,7 +33,24 @@ public partial class LoginForm : Form
         btnLogin.ForeColor = Color.Black;
         btnLogin.CornerRadius = 18;
 
+        txtUsername.Text = Stage3Username;
+        txtPassword.Text = Stage3Password;
+        AddStage3Hint();
         LoadLogo();
+    }
+
+    private void AddStage3Hint()
+    {
+        var hint = new Label
+        {
+            AutoSize = true,
+            Location = new Point(850, 520),
+            ForeColor = ColorTranslator.FromHtml("#545454"),
+            Text = $"Stage 3 test login: {Stage3Username} / {Stage3Password}"
+        };
+
+        Controls.Add(hint);
+        hint.BringToFront();
     }
 
     private void LoadLogo()
@@ -59,8 +79,26 @@ public partial class LoginForm : Form
 
     private void btnLogin_Click(object sender, EventArgs e)
     {
-        var auth = new AuthService();
-        var user = auth.Login(txtUsername.Text.Trim(), txtPassword.Text.Trim());
+        var username = txtUsername.Text.Trim();
+        var password = txtPassword.Text.Trim();
+
+        User? user;
+        if (string.Equals(username, Stage3Username, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(password, Stage3Password, StringComparison.Ordinal))
+        {
+            user = new User
+            {
+                Id = -999,
+                Username = Stage3Username,
+                Role = "Teacher",
+                FullName = "Stage 3 Tester"
+            };
+        }
+        else
+        {
+            var auth = new AuthService();
+            user = auth.Login(username, password);
+        }
 
         if (user == null)
         {
