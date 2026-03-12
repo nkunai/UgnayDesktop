@@ -1,0 +1,35 @@
+Stage 4 Face Emotion Training Report
+timestamp_utc: 2026-03-12T22:04:25.977554+00:00
+dataset_zip: C:\Users\Marissa Macatangay\Documents\GitHub\UgnayDesktop\EmotionTrainer\datasets\fer2013.csv.zip
+csv_path: C:\Users\Marissa Macatangay\Documents\GitHub\UgnayDesktop\EmotionTrainer\datasets\_extracted\fer2013.csv
+labels_fixed: angry, fear, happy, neutral, sad
+
+filtered_class_distribution:
+  angry: 4953
+  fear: 5121
+  happy: 8989
+  neutral: 6198
+  sad: 6077
+
+train_samples: 25102
+val_samples: 3118
+test_samples: 3118
+epochs: 10
+batch_size: 128
+learning_rate: 0.001
+device: cpu
+best_val_acc: 0.5459
+test_loss: 1.1163
+test_acc: 0.5674
+
+epoch_history:
+  epoch 01 | train_loss=1.5506 train_acc=0.3133 | val_loss=1.4716 val_acc=0.3595
+  epoch 02 | train_loss=1.4026 train_acc=0.4113 | val_loss=1.3332 val_acc=0.4477
+  epoch 03 | train_loss=1.3118 train_acc=0.4594 | val_loss=1.2676 val_acc=0.4775
+  epoch 04 | train_loss=1.2491 train_acc=0.4899 | val_loss=1.2332 val_acc=0.4965
+  epoch 05 | train_loss=1.1979 train_acc=0.5130 | val_loss=1.1895 val_acc=0.5096
+  epoch 06 | train_loss=1.1453 train_acc=0.5396 | val_loss=1.1609 val_acc=0.5279
+  epoch 07 | train_loss=1.1015 train_acc=0.5581 | val_loss=1.1504 val_acc=0.5295
+  epoch 08 | train_loss=1.0590 train_acc=0.5773 | val_loss=1.1427 val_acc=0.5411
+  epoch 09 | train_loss=1.0284 train_acc=0.5920 | val_loss=1.1438 val_acc=0.5366
+  epoch 10 | train_loss=0.9788 train_acc=0.6153 | val_loss=1.1414 val_acc=0.5459
