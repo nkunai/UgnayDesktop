@@ -32,6 +32,7 @@ partial class LoginForm
         txtUsername = new TextBox();
         label2 = new Label();
         txtPassword = new TextBox();
+        btnTogglePassword = new Button();
         btnLogin = new UgnayDesktop.Controls.RoundedButton();
         label3 = new Label();
         pictureBoxLogo = new PictureBox();
@@ -72,12 +73,26 @@ partial class LoginForm
         // 
         txtPassword.Font = new Font("Segoe UI", 11F);
         txtPassword.Location = new Point(878, 393);
-        txtPassword.Multiline = true;
+        txtPassword.Multiline = false;
         txtPassword.Name = "txtPassword";
+        txtPassword.AutoSize = false;
         txtPassword.Size = new Size(260, 45);
         txtPassword.TabIndex = 3;
         txtPassword.UseSystemPasswordChar = true;
         txtPassword.TextChanged += txtPassword_TextChanged;
+        // 
+        // btnTogglePassword
+        // 
+        btnTogglePassword.BackColor = Color.FromArgb(217, 217, 217);
+        btnTogglePassword.FlatStyle = FlatStyle.Flat;
+        btnTogglePassword.ForeColor = Color.Black;
+        btnTogglePassword.Location = new Point(1144, 393);
+        btnTogglePassword.Name = "btnTogglePassword";
+        btnTogglePassword.Size = new Size(70, 45);
+        btnTogglePassword.TabIndex = 4;
+        btnTogglePassword.Text = "Show";
+        btnTogglePassword.UseVisualStyleBackColor = false;
+        btnTogglePassword.Click += btnTogglePassword_Click;
         // 
         // btnLogin
         // 
@@ -87,7 +102,7 @@ partial class LoginForm
         btnLogin.Location = new Point(939, 464);
         btnLogin.Name = "btnLogin";
         btnLogin.Size = new Size(131, 40);
-        btnLogin.TabIndex = 4;
+        btnLogin.TabIndex = 5;
         btnLogin.Text = "Login";
         btnLogin.UseVisualStyleBackColor = true;
         btnLogin.Click += btnLogin_Click;
@@ -98,7 +113,7 @@ partial class LoginForm
         label3.Location = new Point(838, 93);
         label3.Name = "label3";
         label3.Size = new Size(349, 120);
-        label3.TabIndex = 5;
+        label3.TabIndex = 6;
         label3.Text = "UGNAY";
         label3.Click += label3_Click;
         // 
@@ -109,7 +124,7 @@ partial class LoginForm
         pictureBoxLogo.Name = "pictureBoxLogo";
         pictureBoxLogo.Size = new Size(680, 540);
         pictureBoxLogo.SizeMode = PictureBoxSizeMode.Zoom;
-        pictureBoxLogo.TabIndex = 6;
+        pictureBoxLogo.TabIndex = 7;
         pictureBoxLogo.TabStop = false;
         // 
         // LoginForm
@@ -119,6 +134,7 @@ partial class LoginForm
         AutoScaleMode = AutoScaleMode.Font;
         BackColor = Color.CornflowerBlue;
         ClientSize = new Size(1243, 701);
+        Controls.Add(btnTogglePassword);
         Controls.Add(pictureBoxLogo);
         Controls.Add(label3);
         Controls.Add(btnLogin);
@@ -140,8 +156,10 @@ partial class LoginForm
     private TextBox txtUsername;
     private Label label2;
     private TextBox txtPassword;
+    private Button btnTogglePassword;
     private UgnayDesktop.Controls.RoundedButton btnLogin;
     private Label label3;
     private PictureBox pictureBoxLogo;
 }
+
 

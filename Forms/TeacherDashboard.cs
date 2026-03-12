@@ -12,12 +12,8 @@ namespace UgnayDesktop.Forms
     public partial class TeacherDashboard : Form
     {
         private static readonly TimeSpan StudentOnlineWindow = TimeSpan.FromSeconds(30);
-        private readonly TwilioService _twilioService = new();
+        private readonly TextBeeService _textBeeService = new();
         private readonly User _currentTeacher;
-
-        private int? _selectedStudentId;
-        private string? _selectedStudentName;
-        private string? _selectedStudentDeviceId;
 
         public TeacherDashboard(User currentTeacher)
         {
@@ -27,45 +23,40 @@ namespace UgnayDesktop.Forms
             UdpSensorListener.Shared.SensorReadingReceived += SensorListener_SensorReadingReceived;
             LoadCurrentTeacherProfile();
             LoadStudents();
-            ResetSelectedStudentDisplay();
             UpdateTeacherPhoneLabel();
-            InitializeGestureStage3Ui();
+            ConfigureStudentEntryUi();
         }
 
         private void LoadCurrentTeacherProfile()
         {
             txtTeacherFullName.Text = _currentTeacher.FullName;
-            txtTeacherPhoneSuffix.Text = ExtractPhPhoneSuffix(_currentTeacher.TeacherPhoneNumber);
+            txtTeacherPhoneSuffix.Text = ExtractPhPhoneDigitsAfterCountryCode(_currentTeacher.TeacherPhoneNumber);
         }
 
-        private static string ExtractPhPhoneSuffix(string? phoneNumber)
+        private static string ExtractPhPhoneDigitsAfterCountryCode(string? phoneNumber)
         {
             if (string.IsNullOrWhiteSpace(phoneNumber))
             {
                 return string.Empty;
             }
 
-            var raw = phoneNumber.Trim();
-            if (raw.StartsWith("+639", StringComparison.Ordinal))
+            var rawDigits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+
+            if (rawDigits.StartsWith("63", StringComparison.Ordinal))
             {
-                raw = raw.Substring(4);
+                rawDigits = rawDigits.Substring(2);
             }
-            else if (raw.StartsWith("639", StringComparison.Ordinal))
+            else if (rawDigits.StartsWith("0", StringComparison.Ordinal))
             {
-                raw = raw.Substring(3);
-            }
-            else if (raw.StartsWith("09", StringComparison.Ordinal))
-            {
-                raw = raw.Substring(2);
+                rawDigits = rawDigits.Substring(1);
             }
 
-            var digits = new string(raw.Where(char.IsDigit).ToArray());
-            if (digits.Length > 9)
+            if (rawDigits.Length > 10)
             {
-                digits = digits.Substring(digits.Length - 9);
+                rawDigits = rawDigits.Substring(rawDigits.Length - 10);
             }
 
-            return digits;
+            return rawDigits;
         }
 
         private void txtTeacherPhoneSuffix_KeyPress(object sender, KeyPressEventArgs e)
@@ -88,120 +79,23 @@ namespace UgnayDesktop.Forms
         {
             using var db = new AppDbContext();
 
-            dgvStudents.DataSource = db.Users
+            var students = db.Users
                 .Where(u => u.Role == "Student")
                 .OrderBy(u => u.FullName)
-                .Select(u => new
-                {
-                    u.Id,
-                    Name = u.FullName,
-                    u.Age,
-                    u.Sex,
-                    u.DeviceId
-                })
+                .Select(u => new { u.Id, u.FullName, u.DeviceId })
                 .ToList();
 
-            if (dgvStudents.Columns["DeviceId"] != null)
-            {
-                dgvStudents.Columns["DeviceId"]!.Visible = false;
-            }
-        }
-
-        private void LoadSensorReadingsForSelectedStudent()
-        {
-            if (string.IsNullOrWhiteSpace(_selectedStudentDeviceId))
-            {
-                dgvSensorReadings.DataSource = null;
-                dgvSensorReadings.Visible = false;
-                return;
-            }
-
-            using var db = new AppDbContext();
-            dgvSensorReadings.DataSource = db.SensorReadings
-                .Where(r => r.DeviceId == _selectedStudentDeviceId)
-                .OrderByDescending(r => r.ReceivedAtUtc)
-                .Take(30)
-                .Select(r => new
-                {
-                    r.ReceivedAtUtc,
-                    Flex = r.FlexValue,
-                    TempC = r.BodyTemperatureC,
-                    Gsr = r.GsrValue,
-                    HR = r.HeartRate,
-                    SpO2 = r.Spo2,
-                    Ax = r.AccelX,
-                    Ay = r.AccelY,
-                    Az = r.AccelZ,
-                    Gx = r.GyroX,
-                    Gy = r.GyroY,
-                    Gz = r.GyroZ,
-                })
-                .ToList();
-
-            dgvSensorReadings.Visible = true;
-        }
-
-        private void UpdateConnectionStatus()
-        {
-            if (string.IsNullOrWhiteSpace(_selectedStudentDeviceId))
-            {
-                lblConnectionStatus.Text = "Connection: select a student";
-                lblConnectionStatus.ForeColor = Color.DimGray;
-                return;
-            }
-
-            using var db = new AppDbContext();
-            var lastReading = db.SensorReadings
-                .Where(r => r.DeviceId == _selectedStudentDeviceId)
-                .OrderByDescending(r => r.ReceivedAtUtc)
-                .Select(r => (DateTime?)r.ReceivedAtUtc)
-                .FirstOrDefault();
-
-            if (lastReading is null)
-            {
-                lblConnectionStatus.Text = $"Connection ({_selectedStudentName}): Not connected (no readings yet)";
-                lblConnectionStatus.ForeColor = Color.DarkRed;
-                return;
-            }
-
-            var elapsed = DateTime.UtcNow - lastReading.Value;
-            if (elapsed <= StudentOnlineWindow)
-            {
-                lblConnectionStatus.Text = $"Connection ({_selectedStudentName}): Connected";
-                lblConnectionStatus.ForeColor = Color.DarkGreen;
-            }
-            else
-            {
-                var lastSeenLocal = lastReading.Value.ToLocalTime().ToString("g");
-                lblConnectionStatus.Text = $"Connection ({_selectedStudentName}): Disconnected (last seen {lastSeenLocal})";
-                lblConnectionStatus.ForeColor = Color.DarkRed;
-            }
-        }
-
-        private void ResetSelectedStudentDisplay()
-        {
-            _selectedStudentId = null;
-            _selectedStudentName = null;
-            _selectedStudentDeviceId = null;
-
-            lblSelectedStudent.Text = "Selected Student: none";
-            lblDecisionStatus.Text = "Decision: select a student to view live readings";
-            lblDecisionStatus.ForeColor = Color.Black;
-            lblConnectionStatus.Text = "Connection: select a student";
-            lblConnectionStatus.ForeColor = Color.DimGray;
-
-            dgvSensorReadings.DataSource = null;
-            dgvSensorReadings.Visible = false;
+            RenderStudentCards(students.Select(s => (s.Id, s.FullName, s.DeviceId)));
         }
 
         private void btnSaveProfile_Click(object sender, EventArgs e)
         {
-            var fullName = txtTeacherFullName.Text.Trim();
-            var phoneSuffix = txtTeacherPhoneSuffix.Text.Trim();
+            var currentFullName = _currentTeacher.FullName;
+            var currentPhoneDigits = ExtractPhPhoneDigitsAfterCountryCode(_currentTeacher.TeacherPhoneNumber);
 
-            if (string.IsNullOrWhiteSpace(fullName))
+            using var dialog = new EditTeacherProfileDialog(currentFullName, currentPhoneDigits);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
-                MessageBox.Show("Full name is required.", "Profile", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -213,47 +107,42 @@ namespace UgnayDesktop.Forms
                 return;
             }
 
-            teacher.FullName = fullName;
-
-            if (string.IsNullOrWhiteSpace(phoneSuffix))
-            {
-                teacher.TeacherPhoneNumber = null;
-            }
-            else
-            {
-                if (phoneSuffix.Length != 9 || !phoneSuffix.All(char.IsDigit))
-                {
-                    MessageBox.Show("Phone number must be 9 digits after +639.", "Profile", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                teacher.TeacherPhoneNumber = $"+639{phoneSuffix}";
-            }
+            teacher.FullName = dialog.TeacherFullName;
+            teacher.TeacherPhoneNumber = dialog.NormalizedPhoneNumber;
 
             db.SaveChanges();
 
             _currentTeacher.FullName = teacher.FullName;
             _currentTeacher.TeacherPhoneNumber = teacher.TeacherPhoneNumber;
 
+            LoadCurrentTeacherProfile();
             UpdateTeacherPhoneLabel();
             MessageBox.Show("Profile updated successfully.", "Profile", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
+        private void ConfigureStudentEntryUi()
+        {
+            lblStudentHeader.Text = "Student Cards";
+            btnAddStudent.Text = "Add Student";
+
+            InitializeStudentCardsUi();
+        }
+
         private void btnAddStudent_Click(object sender, EventArgs e)
         {
-            var fullName = txtStudentFullName.Text.Trim();
-            var ageRaw = txtStudentAge.Text.Trim();
-            var sex = cmbStudentSex.SelectedItem?.ToString();
-
-            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(ageRaw) || string.IsNullOrWhiteSpace(sex))
+            using var dialog = new AddStudentDialog();
+            if (dialog.ShowDialog(this) != DialogResult.OK)
             {
-                MessageBox.Show("Fill student name, age, and sex.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            if (!int.TryParse(ageRaw, out var age) || age < 1 || age > 120)
+            var fullName = dialog.StudentFullName;
+            var age = dialog.StudentAge;
+            var sex = dialog.StudentSex;
+
+            if (string.IsNullOrWhiteSpace(sex))
             {
-                MessageBox.Show("Age must be a whole number between 1 and 120.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Fill student name, age, and sex.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -274,10 +163,6 @@ namespace UgnayDesktop.Forms
             db.SaveChanges();
 
             LoadStudents();
-
-            txtStudentFullName.Clear();
-            txtStudentAge.Clear();
-            cmbStudentSex.SelectedIndex = -1;
 
             MessageBox.Show($"Student added. Assigned device ID: {deviceId}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -311,56 +196,6 @@ namespace UgnayDesktop.Forms
             return $"esp32-{clean}-{token}";
         }
 
-        private void dgvStudents_SelectionChanged(object sender, EventArgs e)
-        {
-            if (dgvStudents.CurrentRow == null)
-            {
-                ResetSelectedStudentDisplay();
-                return;
-            }
-
-            var idRaw = dgvStudents.CurrentRow.Cells["Id"]?.Value?.ToString();
-            if (!int.TryParse(idRaw, out var selectedId))
-            {
-                ResetSelectedStudentDisplay();
-                return;
-            }
-
-            using var db = new AppDbContext();
-            var student = db.Users.FirstOrDefault(u => u.Id == selectedId && u.Role == "Student");
-            if (student == null)
-            {
-                ResetSelectedStudentDisplay();
-                return;
-            }
-
-            _selectedStudentId = student.Id;
-            _selectedStudentName = student.FullName;
-            _selectedStudentDeviceId = student.DeviceId;
-
-            lblSelectedStudent.Text = $"Selected Student: {_selectedStudentName}";
-            LoadSensorReadingsForSelectedStudent();
-            UpdateConnectionStatus();
-
-            if (!string.IsNullOrWhiteSpace(_selectedStudentDeviceId))
-            {
-                using var sensorDb = new AppDbContext();
-                var latest = sensorDb.SensorReadings
-                    .Where(r => r.DeviceId == _selectedStudentDeviceId)
-                    .OrderByDescending(r => r.ReceivedAtUtc)
-                    .FirstOrDefault();
-
-                if (latest != null)
-                {
-                    UpdateDecisionStatus(latest);
-                    return;
-                }
-            }
-
-            lblDecisionStatus.Text = "Decision: waiting for sensor data...";
-            lblDecisionStatus.ForeColor = Color.Black;
-        }
-
         private void SensorListener_SensorReadingReceived(SensorReading reading)
         {
             if (!IsHandleCreated)
@@ -370,40 +205,8 @@ namespace UgnayDesktop.Forms
 
             BeginInvoke(() =>
             {
-                if (_selectedStudentId == null || string.IsNullOrWhiteSpace(_selectedStudentDeviceId))
-                {
-                    return;
-                }
-
-                if (!string.Equals(reading.DeviceId, _selectedStudentDeviceId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                LoadSensorReadingsForSelectedStudent();
-                UpdateDecisionStatus(reading);
-                UpdateConnectionStatus();
+                UpdateStudentCardFromReading(reading);
             });
-        }
-
-        private void UpdateDecisionStatus(SensorReading reading)
-        {
-            var alerts = new List<string>();
-
-            if (reading.BodyTemperatureC is > 38.0) alerts.Add($"High temp {reading.BodyTemperatureC:0.0}C");
-            if (reading.Spo2 is < 92.0) alerts.Add($"Low SpO2 {reading.Spo2:0.0}%");
-            if (reading.HeartRate is > 120.0) alerts.Add($"High HR {reading.HeartRate:0}");
-
-            if (alerts.Count == 0)
-            {
-                lblDecisionStatus.Text = $"Decision: normal ({reading.DeviceId} @ {DateTime.Now:T})";
-                lblDecisionStatus.ForeColor = Color.DarkGreen;
-            }
-            else
-            {
-                lblDecisionStatus.Text = $"Decision: ALERT - {string.Join("; ", alerts)}";
-                lblDecisionStatus.ForeColor = Color.DarkRed;
-            }
         }
 
         private void btnLogout_Click(object sender, EventArgs e)
@@ -421,22 +224,22 @@ namespace UgnayDesktop.Forms
         {
             try
             {
-                _twilioService.OpenConsole();
+                _textBeeService.OpenWebhookSetup();
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not open Twilio console link: {ex.Message}", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show($"Could not open TextBee webhook page: {ex.Message}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
         private void btnTwilioConfigCheck_Click(object sender, EventArgs e)
         {
-            var missing = _twilioService.GetMissingConfigKeys();
+            var missing = _textBeeService.GetMissingConfigKeys();
             var hasTeacherPhone = !string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber);
 
             if (missing.Count == 0 && hasTeacherPhone)
             {
-                MessageBox.Show("Twilio configuration check passed. You can send a test SMS now.", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("TextBee configuration check passed. You can send a test SMS now.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -452,35 +255,82 @@ namespace UgnayDesktop.Forms
             }
 
             MessageBox.Show(
-                "Twilio configuration is incomplete:" + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, issues),
-                "Twilio Config Check",
+                "TextBee configuration is incomplete:" + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, issues),
+                "TextBee Config Check",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
         }
 
-        private void btnTwilioTest_Click(object sender, EventArgs e)
+        private async void btnTwilioTest_Click(object sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber))
             {
-                MessageBox.Show("Teacher phone number is not set. Update your profile first.", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Teacher phone number is not set. Update your profile first.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
-            var missing = _twilioService.GetMissingConfigKeys();
+            var missing = _textBeeService.GetMissingConfigKeys();
             if (missing.Count > 0)
             {
-                MessageBox.Show("Twilio is not configured. Missing: " + string.Join(", ", missing), "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("TextBee is not configured. Missing: " + string.Join(", ", missing), "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
             try
             {
-                var sid = _twilioService.SendTestNotificationToTeacher(_currentTeacher.TeacherPhoneNumber, _currentTeacher.FullName);
-                MessageBox.Show($"Twilio test SMS sent successfully. SID: {sid}", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var reference = await _textBeeService.SendTestNotificationToTeacherAsync(_currentTeacher.TeacherPhoneNumber, _currentTeacher.FullName);
+                MessageBox.Show($"TextBee test SMS sent successfully. Reference: {reference}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Twilio test failed: {ex.Message}", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"TextBee test failed: {ex.Message}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        private async void btnBpmAlert_Click(object sender, EventArgs e)
+        {
+            await SendManualAlertAsync(btnBpmAlert, txtBpmAlertMessage, "BPM Alert");
+        }
+        private async void btnSweatnessAlert_Click(object sender, EventArgs e)
+        {
+            await SendManualAlertAsync(btnSweatnessAlert, txtSweatnessAlertMessage, "Sweatness Alert");
+        }
+        private async void btnTemperatureAlert_Click(object sender, EventArgs e)
+        {
+            await SendManualAlertAsync(btnTemperatureAlert, txtTemperatureAlertMessage, "Temperature Alert");
+        }
+        private async Task SendManualAlertAsync(Button alertButton, TextBox messageTextBox, string alertName)
+        {
+            if (string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber))
+            {
+                MessageBox.Show("Teacher phone number is not set. Update your profile first.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var missing = _textBeeService.GetMissingConfigKeys();
+            if (missing.Count > 0)
+            {
+                MessageBox.Show("TextBee is not configured. Missing: " + string.Join(", ", missing), "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            var message = messageTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                MessageBox.Show($"{alertName} message cannot be empty.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                messageTextBox.Focus();
+                return;
+            }
+            alertButton.Enabled = false;
+            try
+            {
+                var reference = await _textBeeService.SendSmsAsync(_currentTeacher.TeacherPhoneNumber, message);
+                MessageBox.Show($"{alertName} SMS sent successfully. Reference: {reference}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"{alertName} SMS failed: {ex.Message}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                alertButton.Enabled = true;
             }
         }
     }
