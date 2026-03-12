@@ -1,6 +1,6 @@
 # UgnayDesktop
 
-Windows Forms desktop application for login, dashboards, MQTT integration, and Twilio notifications.
+Windows Forms desktop application for login, dashboards, UDP glove telemetry, and Twilio notifications.
 
 ## Requirements
 
@@ -41,3 +41,4 @@ dotnet run --project .\UgnayDesktop.csproj
 - Do not commit generated folders: `bin/`, `obj/`, `publish/`, `.dotnet/`, `.nuget/`.
 - Do not commit local database files (`*.db`).
 - Assets under `Assets/Images` are copied to output automatically.
+

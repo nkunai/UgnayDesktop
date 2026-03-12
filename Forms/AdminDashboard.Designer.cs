@@ -285,7 +285,7 @@ namespace UgnayDesktop.Forms
             btnMqttTest.Name = "btnMqttTest";
             btnMqttTest.Size = new Size(131, 40);
             btnMqttTest.TabIndex = 25;
-            btnMqttTest.Text = "MQTT Test";
+            btnMqttTest.Text = "UDP 5005 Active";
             btnMqttTest.UseVisualStyleBackColor = true;
             btnMqttTest.Click += btnMqttTest_Click;
             // 
@@ -381,3 +381,4 @@ namespace UgnayDesktop.Forms
         private Label lblDecisionStatus;
     }
 }
+

@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Text.Json;
 using System.Windows.Forms;
 
 namespace UgnayDesktop.Forms
@@ -13,7 +12,6 @@ namespace UgnayDesktop.Forms
     public partial class TeacherDashboard : Form
     {
         private static readonly TimeSpan StudentOnlineWindow = TimeSpan.FromSeconds(30);
-        private readonly MqttService _mqttService = new();
         private readonly TwilioService _twilioService = new();
         private readonly User _currentTeacher;
 
@@ -24,32 +22,14 @@ namespace UgnayDesktop.Forms
         public TeacherDashboard(User currentTeacher)
         {
             InitializeComponent();
-            this.StartPosition = FormStartPosition.CenterScreen;
+            StartPosition = FormStartPosition.CenterScreen;
             _currentTeacher = currentTeacher;
-            _mqttService.MessageReceived += MqttService_MessageReceived;
+            UdpSensorListener.Shared.SensorReadingReceived += SensorListener_SensorReadingReceived;
             LoadCurrentTeacherProfile();
             LoadStudents();
             ResetSelectedStudentDisplay();
             UpdateTeacherPhoneLabel();
             InitializeGestureStage3Ui();
-            Shown += TeacherDashboard_Shown;
-        }
-
-        private async void TeacherDashboard_Shown(object? sender, EventArgs e)
-        {
-            try
-            {
-                await _mqttService.SubscribeAsync("esp32/data");
-                await _mqttService.SubscribeAsync("esp32/+/data");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    $"MQTT subscribe failed: {ex.Message}",
-                    "MQTT",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning);
-            }
         }
 
         private void LoadCurrentTeacherProfile()
@@ -205,7 +185,7 @@ namespace UgnayDesktop.Forms
             _selectedStudentDeviceId = null;
 
             lblSelectedStudent.Text = "Selected Student: none";
-            lblDecisionStatus.Text = "Decision: select a student to view MQTT readings";
+            lblDecisionStatus.Text = "Decision: select a student to view live readings";
             lblDecisionStatus.ForeColor = Color.Black;
             lblConnectionStatus.Text = "Connection: select a student";
             lblConnectionStatus.ForeColor = Color.DimGray;
@@ -381,27 +361,10 @@ namespace UgnayDesktop.Forms
             lblDecisionStatus.ForeColor = Color.Black;
         }
 
-        private void MqttService_MessageReceived(string topic, string payload)
+        private void SensorListener_SensorReadingReceived(SensorReading reading)
         {
-            if (!topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(topic, "esp32/data", StringComparison.OrdinalIgnoreCase))
+            if (!IsHandleCreated)
             {
-                return;
-            }
-
-            SensorReading reading;
-            try
-            {
-                reading = ParseSensorPayload(payload);
-                reading.RawJson = payload;
-
-                using var db = new AppDbContext();
-                db.SensorReadings.Add(reading);
-                db.SaveChanges();
-            }
-            catch (Exception ex)
-            {
-                BeginInvoke(() => lblDecisionStatus.Text = $"Decision: invalid payload ({ex.Message})");
                 return;
             }
 
@@ -421,32 +384,6 @@ namespace UgnayDesktop.Forms
                 UpdateDecisionStatus(reading);
                 UpdateConnectionStatus();
             });
-        }
-
-        private static SensorReading ParseSensorPayload(string payload)
-        {
-            using var doc = JsonDocument.Parse(payload);
-            var root = doc.RootElement;
-
-            var mpu = TryGetObject(root, "mpu6050");
-            var max = TryGetObject(root, "max30192") ?? TryGetObject(root, "max30102");
-
-            return new SensorReading
-            {
-                DeviceId = GetString(root, "deviceId") ?? "unknown",
-                ReceivedAtUtc = GetDateTime(root, "ts") ?? DateTime.UtcNow,
-                FlexValue = GetNumber(root, "flex") ?? GetNumber(root, "flexSensor"),
-                AccelX = mpu is null ? null : GetNumber(mpu.Value, "accelX"),
-                AccelY = mpu is null ? null : GetNumber(mpu.Value, "accelY"),
-                AccelZ = mpu is null ? null : GetNumber(mpu.Value, "accelZ"),
-                GyroX = mpu is null ? null : GetNumber(mpu.Value, "gyroX"),
-                GyroY = mpu is null ? null : GetNumber(mpu.Value, "gyroY"),
-                GyroZ = mpu is null ? null : GetNumber(mpu.Value, "gyroZ"),
-                HeartRate = max is null ? null : GetNumber(max.Value, "heartRate"),
-                Spo2 = max is null ? null : GetNumber(max.Value, "spo2"),
-                GsrValue = GetNumber(root, "gsr") ?? GetNumber(root, "gsrValue"),
-                BodyTemperatureC = GetNumber(root, "ds18b20") ?? GetNumber(root, "temperatureC"),
-            };
         }
 
         private void UpdateDecisionStatus(SensorReading reading)
@@ -469,45 +406,13 @@ namespace UgnayDesktop.Forms
             }
         }
 
-        private static JsonElement? TryGetObject(JsonElement element, string property)
-        {
-            if (element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object)
-            {
-                return value;
-            }
-
-            return null;
-        }
-
-        private static double? GetNumber(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var n)) return n;
-            if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out var parsed)) return parsed;
-            return null;
-        }
-
-        private static string? GetString(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
-        }
-
-        private static DateTime? GetDateTime(JsonElement element, string property)
-        {
-            var raw = GetString(element, property);
-            if (raw == null) return null;
-            return DateTime.TryParse(raw, out var parsed) ? parsed.ToUniversalTime() : null;
-        }
-
-        private async void btnLogout_Click(object sender, EventArgs e)
+        private void btnLogout_Click(object sender, EventArgs e)
         {
             var confirm = MessageBox.Show("Are you sure you want to log out?", "Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
             if (confirm == DialogResult.Yes)
             {
-                _mqttService.MessageReceived -= MqttService_MessageReceived;
-                await _mqttService.DisconnectAsync();
+                UdpSensorListener.Shared.SensorReadingReceived -= SensorListener_SensorReadingReceived;
                 Close();
             }
         }
@@ -580,4 +485,3 @@ namespace UgnayDesktop.Forms
         }
     }
 }
-

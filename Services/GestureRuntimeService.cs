@@ -13,9 +13,9 @@ public sealed class GestureRuntimeService : IDisposable
     private readonly Queue<Dictionary<string, double>> _recentFrames = new();
     private readonly NearestCentroidRuntimeModel _staticModel;
     private readonly NearestCentroidRuntimeModel _motionModel;
-    private readonly string _previewPath;
 
     private Process? _process;
+    private string? _lastWorkerError;
     private GestureRuntimeSnapshot _latestSnapshot;
 
     public GestureRuntimeService()
@@ -26,17 +26,22 @@ public sealed class GestureRuntimeService : IDisposable
         _motionModel = NearestCentroidRuntimeModel.Load(ResolveModelPath(
             "gesture_motion_separated_model.json",
             "gesture_motion_model.json"));
-
-        _previewPath = Path.Combine(Path.GetTempPath(), "ugnay_stage3_preview.jpg");
         _latestSnapshot = new GestureRuntimeSnapshot
         {
-            PreviewImagePath = _previewPath,
             Status = "Idle",
             ActiveModel = "None",
             PredictedLabel = "Waiting to start camera"
         };
     }
 
+
+    private static void LogWorkerMessage(string message)
+    {
+        var line = $"[Stage3 Camera] {message}";
+        Console.Error.WriteLine(line);
+        Debug.WriteLine(line);
+        Trace.WriteLine(line);
+    }
     public GestureRuntimeSnapshot LatestSnapshot
     {
         get
@@ -48,17 +53,17 @@ public sealed class GestureRuntimeService : IDisposable
         }
     }
 
-    public void Start(int cameraIndex)
+    public void Start(int cameraIndex, Stage3DisplayMode displayMode = Stage3DisplayMode.InAppStream)
     {
         Stop();
+        _lastWorkerError = null;
 
         var scriptPath = ResolveSupportFile("mediapipe_hands_worker.py");
-        TryDeletePreview();
 
         var psi = new ProcessStartInfo
         {
             FileName = "python",
-            Arguments = $"\"{scriptPath}\" --camera {cameraIndex} --frame-out \"{_previewPath}\" --no-window",
+            Arguments = $"\"{scriptPath}\" --camera {cameraIndex} --display-mode {ToWorkerArg(displayMode)}{(displayMode == Stage3DisplayMode.InAppStream ? " --no-window" : string.Empty)}",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -77,6 +82,7 @@ public sealed class GestureRuntimeService : IDisposable
 
         _ = Task.Run(ReadOutputLoopAsync);
         _ = Task.Run(ReadErrorLoopAsync);
+        _ = Task.Run(WatchProcessAsync);
     }
 
     public void Stop()
@@ -160,8 +166,35 @@ public sealed class GestureRuntimeService : IDisposable
                 continue;
             }
 
-            UpdateSnapshot(snapshot => snapshot with { Status = line.Trim() });
+            _lastWorkerError = line.Trim();
+            LogWorkerMessage(_lastWorkerError);
+            UpdateSnapshot(snapshot => snapshot with { Status = _lastWorkerError });
         }
+    }
+
+    private async Task WatchProcessAsync()
+    {
+        if (_process == null)
+        {
+            return;
+        }
+
+        await _process.WaitForExitAsync();
+
+        var exitCode = _process.ExitCode;
+        var error = string.IsNullOrWhiteSpace(_lastWorkerError)
+            ? $"Camera worker stopped (exit code {exitCode})."
+            : $"{_lastWorkerError} (exit code {exitCode})";
+
+        LogWorkerMessage(error);
+
+        UpdateSnapshot(snapshot => snapshot with
+        {
+            Status = error,
+            PredictedLabel = "Camera stopped",
+            ActiveModel = "Worker exited",
+            MovementScore = 0
+        });
     }
 
     private void EvaluateFrame(HandFramePayload frame)
@@ -211,7 +244,7 @@ public sealed class GestureRuntimeService : IDisposable
             MovementScore = movementScore,
             Distance = prediction.Distance,
             Confidence = prediction.Confidence,
-            PreviewImagePath = _previewPath
+            PreviewImageBytes = ParsePreviewBytes(frame.PreviewJpegBase64)
         });
     }
 
@@ -308,6 +341,26 @@ public sealed class GestureRuntimeService : IDisposable
         }
     }
 
+
+    private static string ToWorkerArg(Stage3DisplayMode displayMode)
+        => displayMode == Stage3DisplayMode.ExternalWindow ? "external" : "inapp";
+
+    private static byte[]? ParsePreviewBytes(string? previewJpegBase64)
+    {
+        if (string.IsNullOrWhiteSpace(previewJpegBase64))
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(previewJpegBase64);
+        }
+        catch
+        {
+            return null;
+        }
+    }
     private string ResolveSupportFile(string fileName)
     {
         var candidates = new[]
@@ -321,9 +374,7 @@ public sealed class GestureRuntimeService : IDisposable
 
         var match = candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
         return match ?? throw new FileNotFoundException($"Missing support file: {fileName}");
-    }
-
-    private static string ResolveModelPath(string preferred, string fallback)
+    }    private static string ResolveModelPath(string preferred, string fallback)
     {
         var candidates = new[]
         {
@@ -337,21 +388,6 @@ public sealed class GestureRuntimeService : IDisposable
         return match ?? throw new FileNotFoundException($"Missing model file: {preferred}");
     }
 
-    private void TryDeletePreview()
-    {
-        try
-        {
-            if (File.Exists(_previewPath))
-            {
-                File.Delete(_previewPath);
-            }
-        }
-        catch
-        {
-            // ignored
-        }
-    }
-
     public void Dispose()
     {
         Stop();
@@ -360,7 +396,7 @@ public sealed class GestureRuntimeService : IDisposable
 
 public sealed record GestureRuntimeSnapshot
 {
-    public string PreviewImagePath { get; init; } = string.Empty;
+    public byte[]? PreviewImageBytes { get; init; }
     public string Status { get; init; } = "Idle";
     public string ActiveModel { get; init; } = "None";
     public string PredictedLabel { get; init; } = "Waiting";
@@ -371,10 +407,16 @@ public sealed record GestureRuntimeSnapshot
 
 internal sealed class HandFramePayload
 {
+    [System.Text.Json.Serialization.JsonPropertyName("left")]
     public List<double>? Left { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("right")]
     public List<double>? Right { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("left_held")]
     public bool LeftHeld { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("right_held")]
     public bool RightHeld { get; init; }
+    [System.Text.Json.Serialization.JsonPropertyName("preview_jpeg_base64")]
+    public string? PreviewJpegBase64 { get; init; }
 }
 
 internal static class FeatureMapper
@@ -500,3 +542,8 @@ internal sealed class NearestCentroidRuntimeModel
 
 internal sealed record PredictionResult(string Label, double Distance, double Confidence);
 
+public enum Stage3DisplayMode
+{
+    InAppStream,
+    ExternalWindow
+}

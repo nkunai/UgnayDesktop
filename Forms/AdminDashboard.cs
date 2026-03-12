@@ -4,7 +4,7 @@ using UgnayDesktop.Services;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Text.Json;
+using System.Linq;
 using System.Windows.Forms;
 using BCrypt.Net;
 
@@ -13,33 +13,20 @@ namespace UgnayDesktop.Forms
     public partial class AdminDashboard : Form
     {
         private readonly User _currentUser;
-        private readonly MqttService _mqttService = new();
         private int? _selectedUserId;
 
         public AdminDashboard(User currentUser)
         {
             InitializeComponent();
             _currentUser = currentUser;
-            _mqttService.MessageReceived += MqttService_MessageReceived;
+            UdpSensorListener.Shared.SensorReadingReceived += SensorListener_SensorReadingReceived;
             LoadUsers();
             LoadSensorReadings();
             lblDecisionStatus.Text = "Decision: waiting for sensor data...";
             lblSelectedUser.Text = "Selected user: none";
             UpdateProfileFieldState();
-            Shown += AdminDashboard_Shown;
-        }
-
-        private async void AdminDashboard_Shown(object? sender, EventArgs e)
-        {
-            try
-            {
-                await _mqttService.SubscribeAsync("esp32/data");
-                await _mqttService.SubscribeAsync("esp32/+/data");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"MQTT subscribe failed: {ex.Message}", "MQTT", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
+            btnMqttTest.Enabled = false;
+            btnMqttTest.Text = "UDP 5005 Active";
         }
 
         private void LoadUsers()
@@ -105,27 +92,10 @@ namespace UgnayDesktop.Forms
                 .ToList();
         }
 
-        private void MqttService_MessageReceived(string topic, string payload)
+        private void SensorListener_SensorReadingReceived(SensorReading reading)
         {
-            if (!topic.EndsWith("/data", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(topic, "esp32/data", StringComparison.OrdinalIgnoreCase))
+            if (!IsHandleCreated)
             {
-                return;
-            }
-
-            SensorReading reading;
-            try
-            {
-                reading = ParseSensorPayload(payload);
-                reading.RawJson = payload;
-
-                using var db = new AppDbContext();
-                db.SensorReadings.Add(reading);
-                db.SaveChanges();
-            }
-            catch (Exception ex)
-            {
-                BeginInvoke(() => lblDecisionStatus.Text = $"Decision: invalid payload ({ex.Message})");
                 return;
             }
 
@@ -134,32 +104,6 @@ namespace UgnayDesktop.Forms
                 LoadSensorReadings();
                 UpdateDecisionStatus(reading);
             });
-        }
-
-        private static SensorReading ParseSensorPayload(string payload)
-        {
-            using var doc = JsonDocument.Parse(payload);
-            var root = doc.RootElement;
-
-            var mpu = TryGetObject(root, "mpu6050");
-            var max = TryGetObject(root, "max30192") ?? TryGetObject(root, "max30102");
-
-            return new SensorReading
-            {
-                DeviceId = GetString(root, "deviceId") ?? "unknown",
-                ReceivedAtUtc = GetDateTime(root, "ts") ?? DateTime.UtcNow,
-                FlexValue = GetNumber(root, "flex") ?? GetNumber(root, "flexSensor"),
-                AccelX = mpu is null ? null : GetNumber(mpu.Value, "accelX"),
-                AccelY = mpu is null ? null : GetNumber(mpu.Value, "accelY"),
-                AccelZ = mpu is null ? null : GetNumber(mpu.Value, "accelZ"),
-                GyroX = mpu is null ? null : GetNumber(mpu.Value, "gyroX"),
-                GyroY = mpu is null ? null : GetNumber(mpu.Value, "gyroY"),
-                GyroZ = mpu is null ? null : GetNumber(mpu.Value, "gyroZ"),
-                HeartRate = max is null ? null : GetNumber(max.Value, "heartRate"),
-                Spo2 = max is null ? null : GetNumber(max.Value, "spo2"),
-                GsrValue = GetNumber(root, "gsr") ?? GetNumber(root, "gsrValue"),
-                BodyTemperatureC = GetNumber(root, "ds18b20") ?? GetNumber(root, "temperatureC"),
-            };
         }
 
         private void UpdateDecisionStatus(SensorReading reading)
@@ -180,37 +124,6 @@ namespace UgnayDesktop.Forms
                 lblDecisionStatus.Text = $"Decision: ALERT - {string.Join("; ", alerts)}";
                 lblDecisionStatus.ForeColor = Color.DarkRed;
             }
-        }
-
-        private static JsonElement? TryGetObject(JsonElement element, string property)
-        {
-            if (element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Object)
-            {
-                return value;
-            }
-
-            return null;
-        }
-
-        private static double? GetNumber(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var n)) return n;
-            if (value.ValueKind == JsonValueKind.String && double.TryParse(value.GetString(), out var parsed)) return parsed;
-            return null;
-        }
-
-        private static string? GetString(JsonElement element, string property)
-        {
-            if (!element.TryGetProperty(property, out var value)) return null;
-            return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
-        }
-
-        private static DateTime? GetDateTime(JsonElement element, string property)
-        {
-            var raw = GetString(element, property);
-            if (raw == null) return null;
-            return DateTime.TryParse(raw, out var parsed) ? parsed.ToUniversalTime() : null;
         }
 
         private void btnAddUser_Click(object sender, EventArgs e)
@@ -508,44 +421,22 @@ namespace UgnayDesktop.Forms
             }
         }
 
-        private async void btnMqttTest_Click(object sender, EventArgs e)
+        private void btnMqttTest_Click(object sender, EventArgs e)
         {
-            btnMqttTest.Enabled = false;
-
-            try
-            {
-                var ok = await _mqttService.RunLoopbackTestAsync();
-
-                if (ok)
-                {
-                    MessageBox.Show("MQTT test passed. Connected and received loopback message from localhost:1883.", "MQTT", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("MQTT test failed (timeout). Check if Mosquitto is running on localhost:1883.", "MQTT", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"MQTT test error: {ex.Message}", "MQTT", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                btnMqttTest.Enabled = true;
-            }
         }
 
-        private async void btnLogout_Click(object sender, EventArgs e)
+        private void btnLogout_Click(object sender, EventArgs e)
         {
             var confirm = MessageBox.Show("Are you sure you want to log out?", "Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
             if (confirm == DialogResult.Yes)
             {
-                _mqttService.MessageReceived -= MqttService_MessageReceived;
-                await _mqttService.DisconnectAsync();
+                UdpSensorListener.Shared.SensorReadingReceived -= SensorListener_SensorReadingReceived;
                 Close();
             }
         }
     }
 }
-// dfsdf
+
+
+

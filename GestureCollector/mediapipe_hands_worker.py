@@ -1,6 +1,6 @@
 import argparse
+import base64
 import json
-import os
 import cv2
 import mediapipe as mp
 import sys
@@ -17,6 +17,9 @@ R_WRIST = 16
 
 SMOOTH_ALPHA = 0.35
 HAND_HOLD_FRAMES = 6
+PROCESS_WIDTH = 960
+PROCESS_HEIGHT = 540
+PREVIEW_WIDTH = 720
 
 
 def flatten_landmarks(hand_landmarks):
@@ -64,26 +67,30 @@ def draw_upper_body(frame, pose_landmarks):
         cv2.circle(frame, px(name), 4, (50, 255, 50), -1)
 
 
-def write_preview(frame, output_path):
-    if not output_path:
-        return
+def encode_preview_jpeg_base64(frame):
+    preview_frame = frame
+    if frame.shape[1] > PREVIEW_WIDTH:
+        preview_height = int(frame.shape[0] * (PREVIEW_WIDTH / frame.shape[1]))
+        preview_frame = cv2.resize(frame, (PREVIEW_WIDTH, preview_height), interpolation=cv2.INTER_AREA)
 
-    temp_path = output_path + ".tmp.jpg"
-    cv2.imwrite(temp_path, frame)
-    os.replace(temp_path, output_path)
+    ok, encoded = cv2.imencode(".jpg", preview_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not ok:
+        return None
+
+    return base64.b64encode(encoded.tobytes()).decode("ascii")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--camera", type=int, default=0)
-    parser.add_argument("--frame-out", type=str, default="")
+    parser.add_argument("--display-mode", choices=["inapp", "external"], default="external")
     parser.add_argument("--no-window", action="store_true")
     args = parser.parse_args()
 
     mp_holistic = mp.solutions.holistic
     holistic = mp_holistic.Holistic(
         static_image_mode=False,
-        model_complexity=1,
+        model_complexity=0,
         smooth_landmarks=True,
         min_detection_confidence=0.55,
         min_tracking_confidence=0.70,
@@ -91,15 +98,15 @@ def main():
 
     cap = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, PROCESS_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, PROCESS_HEIGHT)
     cap.set(cv2.CAP_PROP_FPS, 30)
 
     if not cap.isOpened():
         raise RuntimeError("Camera failed to open")
 
     show_pose_markers = True
-    show_window = not args.no_window
+    show_window = args.display_mode == "external" and not args.no_window
     cmd_q = queue.Queue()
 
     def stdin_reader():
@@ -138,6 +145,7 @@ def main():
             "pose_upper": None,
             "left_held": False,
             "right_held": False,
+            "preview_jpeg_base64": None,
         }
 
         detected_left = None
@@ -188,7 +196,9 @@ def main():
         cv2.putText(frame, f"Arms/Shoulders: {pose_state}", (20, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2, cv2.LINE_AA)
 
-        write_preview(frame, args.frame_out)
+        if args.display_mode == "inapp":
+            out["preview_jpeg_base64"] = encode_preview_jpeg_base64(frame)
+
         print(json.dumps(out), flush=True)
 
         if show_window:
