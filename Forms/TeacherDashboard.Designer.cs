@@ -39,9 +39,6 @@ namespace UgnayDesktop.Forms
             txtTeacherPhoneSuffix = new TextBox();
             btnSaveProfile = new Button();
             lblTeacherPhone = new Label();
-            btnTwilioConfigCheck = new Button();
-            btnTwilioLink = new Button();
-            btnTwilioTest = new Button();
             grpManualAlerts = new GroupBox();
             lblBpmAlert = new Label();
             txtBpmAlertMessage = new TextBox();
@@ -173,36 +170,6 @@ namespace UgnayDesktop.Forms
             lblTeacherPhone.Size = new Size(156, 30);
             lblTeacherPhone.TabIndex = 10;
             lblTeacherPhone.Text = "Teacher Phone:";
-            // 
-            // btnTwilioConfigCheck
-            // 
-            btnTwilioConfigCheck.Location = new Point(630, 12);
-            btnTwilioConfigCheck.Name = "btnTwilioConfigCheck";
-            btnTwilioConfigCheck.Size = new Size(131, 40);
-            btnTwilioConfigCheck.TabIndex = 11;
-            btnTwilioConfigCheck.Text = "Config Check";
-            btnTwilioConfigCheck.UseVisualStyleBackColor = true;
-            btnTwilioConfigCheck.Click += btnTwilioConfigCheck_Click;
-            // 
-            // btnTwilioLink
-            // 
-            btnTwilioLink.Location = new Point(767, 12);
-            btnTwilioLink.Name = "btnTwilioLink";
-            btnTwilioLink.Size = new Size(131, 40);
-            btnTwilioLink.TabIndex = 12;
-            btnTwilioLink.Text = "TextBee Link";
-            btnTwilioLink.UseVisualStyleBackColor = true;
-            btnTwilioLink.Click += btnTwilioLink_Click;
-            // 
-            // btnTwilioTest
-            // 
-            btnTwilioTest.Location = new Point(904, 12);
-            btnTwilioTest.Name = "btnTwilioTest";
-            btnTwilioTest.Size = new Size(131, 40);
-            btnTwilioTest.TabIndex = 13;
-            btnTwilioTest.Text = "TextBee Test";
-            btnTwilioTest.UseVisualStyleBackColor = true;
-            btnTwilioTest.Click += btnTwilioTest_Click;
             // 
             // grpManualAlerts
             // 
@@ -440,9 +407,6 @@ namespace UgnayDesktop.Forms
             Controls.Add(txtStudentFullName);
             Controls.Add(labelFullName);
             Controls.Add(lblStudentHeader);
-            Controls.Add(btnTwilioTest);
-            Controls.Add(btnTwilioLink);
-            Controls.Add(btnTwilioConfigCheck);
             Controls.Add(lblTeacherPhone);
             Controls.Add(btnSaveProfile);
             Controls.Add(txtTeacherPhoneSuffix);
@@ -478,9 +442,6 @@ namespace UgnayDesktop.Forms
         private TextBox txtTeacherPhoneSuffix;
         private Button btnSaveProfile;
         private Label lblTeacherPhone;
-        private Button btnTwilioConfigCheck;
-        private Button btnTwilioLink;
-        private Button btnTwilioTest;
         private GroupBox grpManualAlerts;
         private Label lblBpmAlert;
         private TextBox txtBpmAlertMessage;
