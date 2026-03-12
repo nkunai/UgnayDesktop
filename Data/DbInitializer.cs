@@ -37,19 +37,49 @@ public static class DbInitializer
         EnsureUserAgeColumn(db);
         EnsureUserSexColumn(db);
 
-        if (!db.Users.Any())
-        {
-            var admin = new User
-            {
-                Username = "admin",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
-                Role = "Admin",
-                FullName = "System Administrator"
-            };
+        EnsureDefaultAdminUser(db);
+        EnsureDefaultTeacherUser(db);
+        db.SaveChanges();
+    }
 
-            db.Users.Add(admin);
-            db.SaveChanges();
+    private static void EnsureDefaultAdminUser(AppDbContext db)
+    {
+        var admin = db.Users.FirstOrDefault(u => u.Username == "admin");
+        if (admin != null)
+        {
+            return;
         }
+
+        db.Users.Add(new User
+        {
+            Username = "admin",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("admin123"),
+            Role = "Admin",
+            FullName = "System Administrator"
+        });
+    }
+
+    private static void EnsureDefaultTeacherUser(AppDbContext db)
+    {
+        var teacher = db.Users.FirstOrDefault(u => u.Username == "teacher");
+
+        if (teacher == null)
+        {
+            db.Users.Add(new User
+            {
+                Username = "teacher",
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("teacher"),
+                Role = "Teacher",
+                FullName = "teachertester",
+                TeacherPhoneNumber = "+639186764468"
+            });
+            return;
+        }
+
+        teacher.PasswordHash = BCrypt.Net.BCrypt.HashPassword("teacher");
+        teacher.Role = "Teacher";
+        teacher.FullName = "teachertester";
+        teacher.TeacherPhoneNumber = "+639186764468";
     }
 
     private static void EnsureUserTeacherPhoneColumn(AppDbContext db)

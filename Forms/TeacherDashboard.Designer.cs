@@ -39,9 +39,16 @@ namespace UgnayDesktop.Forms
             txtTeacherPhoneSuffix = new TextBox();
             btnSaveProfile = new Button();
             lblTeacherPhone = new Label();
-            btnTwilioConfigCheck = new Button();
-            btnTwilioLink = new Button();
-            btnTwilioTest = new Button();
+            grpManualAlerts = new GroupBox();
+            lblBpmAlert = new Label();
+            txtBpmAlertMessage = new TextBox();
+            btnBpmAlert = new Button();
+            lblSweatnessAlert = new Label();
+            txtSweatnessAlertMessage = new TextBox();
+            btnSweatnessAlert = new Button();
+            lblTemperatureAlert = new Label();
+            txtTemperatureAlertMessage = new TextBox();
+            btnTemperatureAlert = new Button();
             lblStudentHeader = new Label();
             labelFullName = new Label();
             txtStudentFullName = new TextBox();
@@ -53,8 +60,10 @@ namespace UgnayDesktop.Forms
             dgvStudents = new DataGridView();
             lblConnectionStatus = new Label();
             lblSelectedStudent = new Label();
+            flpStudentCards = new FlowLayoutPanel();
             ((System.ComponentModel.ISupportInitialize)dgvSensorReadings).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvStudents).BeginInit();
+            grpManualAlerts.SuspendLayout();
             SuspendLayout();
             // 
             // dgvSensorReadings
@@ -74,6 +83,7 @@ namespace UgnayDesktop.Forms
             lblDecisionStatus.Size = new Size(92, 30);
             lblDecisionStatus.TabIndex = 1;
             lblDecisionStatus.Text = "Decision";
+            lblDecisionStatus.Visible = false;
             // 
             // btnLogout
             // 
@@ -102,6 +112,7 @@ namespace UgnayDesktop.Forms
             labelTeacherName.Size = new Size(107, 30);
             labelTeacherName.TabIndex = 4;
             labelTeacherName.Text = "Full Name";
+            labelTeacherName.Visible = false;
             // 
             // txtTeacherFullName
             // 
@@ -109,6 +120,7 @@ namespace UgnayDesktop.Forms
             txtTeacherFullName.Name = "txtTeacherFullName";
             txtTeacherFullName.Size = new Size(262, 35);
             txtTeacherFullName.TabIndex = 5;
+            txtTeacherFullName.Visible = false;
             // 
             // labelTeacherPhoneEdit
             // 
@@ -118,6 +130,7 @@ namespace UgnayDesktop.Forms
             labelTeacherPhoneEdit.Size = new Size(156, 30);
             labelTeacherPhoneEdit.TabIndex = 6;
             labelTeacherPhoneEdit.Text = "Teacher Phone";
+            labelTeacherPhoneEdit.Visible = false;
             // 
             // lblTeacherPhonePrefix
             // 
@@ -126,16 +139,18 @@ namespace UgnayDesktop.Forms
             lblTeacherPhonePrefix.Name = "lblTeacherPhonePrefix";
             lblTeacherPhonePrefix.Size = new Size(58, 30);
             lblTeacherPhonePrefix.TabIndex = 7;
-            lblTeacherPhonePrefix.Text = "+639";
+            lblTeacherPhonePrefix.Text = "+63";
+            lblTeacherPhonePrefix.Visible = false;
             // 
             // txtTeacherPhoneSuffix
             // 
             txtTeacherPhoneSuffix.Location = new Point(342, 82);
-            txtTeacherPhoneSuffix.MaxLength = 9;
+            txtTeacherPhoneSuffix.MaxLength = 10;
             txtTeacherPhoneSuffix.Name = "txtTeacherPhoneSuffix";
             txtTeacherPhoneSuffix.Size = new Size(200, 35);
             txtTeacherPhoneSuffix.TabIndex = 8;
             txtTeacherPhoneSuffix.KeyPress += txtTeacherPhoneSuffix_KeyPress;
+            txtTeacherPhoneSuffix.Visible = false;
             // 
             // btnSaveProfile
             // 
@@ -143,7 +158,7 @@ namespace UgnayDesktop.Forms
             btnSaveProfile.Name = "btnSaveProfile";
             btnSaveProfile.Size = new Size(156, 40);
             btnSaveProfile.TabIndex = 9;
-            btnSaveProfile.Text = "Save Profile";
+            btnSaveProfile.Text = "Edit Profile";
             btnSaveProfile.UseVisualStyleBackColor = true;
             btnSaveProfile.Click += btnSaveProfile_Click;
             // 
@@ -156,36 +171,105 @@ namespace UgnayDesktop.Forms
             lblTeacherPhone.TabIndex = 10;
             lblTeacherPhone.Text = "Teacher Phone:";
             // 
-            // btnTwilioConfigCheck
+            // grpManualAlerts
             // 
-            btnTwilioConfigCheck.Location = new Point(630, 12);
-            btnTwilioConfigCheck.Name = "btnTwilioConfigCheck";
-            btnTwilioConfigCheck.Size = new Size(131, 40);
-            btnTwilioConfigCheck.TabIndex = 11;
-            btnTwilioConfigCheck.Text = "Config Check";
-            btnTwilioConfigCheck.UseVisualStyleBackColor = true;
-            btnTwilioConfigCheck.Click += btnTwilioConfigCheck_Click;
+            grpManualAlerts.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            grpManualAlerts.Controls.Add(btnTemperatureAlert);
+            grpManualAlerts.Controls.Add(txtTemperatureAlertMessage);
+            grpManualAlerts.Controls.Add(lblTemperatureAlert);
+            grpManualAlerts.Controls.Add(btnSweatnessAlert);
+            grpManualAlerts.Controls.Add(txtSweatnessAlertMessage);
+            grpManualAlerts.Controls.Add(lblSweatnessAlert);
+            grpManualAlerts.Controls.Add(btnBpmAlert);
+            grpManualAlerts.Controls.Add(txtBpmAlertMessage);
+            grpManualAlerts.Controls.Add(lblBpmAlert);
+            grpManualAlerts.Location = new Point(710, 58);
+            grpManualAlerts.Name = "grpManualAlerts";
+            grpManualAlerts.Size = new Size(462, 142);
+            grpManualAlerts.TabIndex = 14;
+            grpManualAlerts.TabStop = false;
+            grpManualAlerts.Text = "Manual Alerts";
             // 
-            // btnTwilioLink
+            // lblBpmAlert
             // 
-            btnTwilioLink.Location = new Point(767, 12);
-            btnTwilioLink.Name = "btnTwilioLink";
-            btnTwilioLink.Size = new Size(131, 40);
-            btnTwilioLink.TabIndex = 12;
-            btnTwilioLink.Text = "Twilio Link";
-            btnTwilioLink.UseVisualStyleBackColor = true;
-            btnTwilioLink.Click += btnTwilioLink_Click;
+            lblBpmAlert.AutoSize = true;
+            lblBpmAlert.Location = new Point(12, 32);
+            lblBpmAlert.Name = "lblBpmAlert";
+            lblBpmAlert.Size = new Size(58, 30);
+            lblBpmAlert.TabIndex = 0;
+            lblBpmAlert.Text = "BPM";
             // 
-            // btnTwilioTest
+            // txtBpmAlertMessage
             // 
-            btnTwilioTest.Location = new Point(904, 12);
-            btnTwilioTest.Name = "btnTwilioTest";
-            btnTwilioTest.Size = new Size(131, 40);
-            btnTwilioTest.TabIndex = 13;
-            btnTwilioTest.Text = "Twilio Test";
-            btnTwilioTest.UseVisualStyleBackColor = true;
-            btnTwilioTest.Click += btnTwilioTest_Click;
+            txtBpmAlertMessage.Location = new Point(97, 29);
+            txtBpmAlertMessage.Name = "txtBpmAlertMessage";
+            txtBpmAlertMessage.Size = new Size(233, 35);
+            txtBpmAlertMessage.TabIndex = 1;
+            txtBpmAlertMessage.Text = "BPM is too high";
             // 
+            // btnBpmAlert
+            // 
+            btnBpmAlert.Location = new Point(336, 28);
+            btnBpmAlert.Name = "btnBpmAlert";
+            btnBpmAlert.Size = new Size(112, 37);
+            btnBpmAlert.TabIndex = 2;
+            btnBpmAlert.Text = "BPM Alert";
+            btnBpmAlert.UseVisualStyleBackColor = true;
+            btnBpmAlert.Click += btnBpmAlert_Click;
+            // 
+            // lblSweatnessAlert
+            // 
+            lblSweatnessAlert.AutoSize = true;
+            lblSweatnessAlert.Location = new Point(12, 67);
+            lblSweatnessAlert.Name = "lblSweatnessAlert";
+            lblSweatnessAlert.Size = new Size(124, 30);
+            lblSweatnessAlert.TabIndex = 3;
+            lblSweatnessAlert.Text = "Sweatness";
+            // 
+            // txtSweatnessAlertMessage
+            // 
+            txtSweatnessAlertMessage.Location = new Point(142, 64);
+            txtSweatnessAlertMessage.Name = "txtSweatnessAlertMessage";
+            txtSweatnessAlertMessage.Size = new Size(188, 35);
+            txtSweatnessAlertMessage.TabIndex = 4;
+            txtSweatnessAlertMessage.Text = "sweatness level is too high";
+            // 
+            // btnSweatnessAlert
+            // 
+            btnSweatnessAlert.Location = new Point(336, 63);
+            btnSweatnessAlert.Name = "btnSweatnessAlert";
+            btnSweatnessAlert.Size = new Size(112, 37);
+            btnSweatnessAlert.TabIndex = 5;
+            btnSweatnessAlert.Text = "Sweatness Alert";
+            btnSweatnessAlert.UseVisualStyleBackColor = true;
+            btnSweatnessAlert.Click += btnSweatnessAlert_Click;
+            // 
+            // lblTemperatureAlert
+            // 
+            lblTemperatureAlert.AutoSize = true;
+            lblTemperatureAlert.Location = new Point(12, 102);
+            lblTemperatureAlert.Name = "lblTemperatureAlert";
+            lblTemperatureAlert.Size = new Size(140, 30);
+            lblTemperatureAlert.TabIndex = 6;
+            lblTemperatureAlert.Text = "Temperature";
+            // 
+            // txtTemperatureAlertMessage
+            // 
+            txtTemperatureAlertMessage.Location = new Point(158, 99);
+            txtTemperatureAlertMessage.Name = "txtTemperatureAlertMessage";
+            txtTemperatureAlertMessage.Size = new Size(172, 35);
+            txtTemperatureAlertMessage.TabIndex = 7;
+            txtTemperatureAlertMessage.Text = "Temperature is too high";
+            // 
+            // btnTemperatureAlert
+            // 
+            btnTemperatureAlert.Location = new Point(336, 98);
+            btnTemperatureAlert.Name = "btnTemperatureAlert";
+            btnTemperatureAlert.Size = new Size(112, 37);
+            btnTemperatureAlert.TabIndex = 8;
+            btnTemperatureAlert.Text = "Temperature Alert";
+            btnTemperatureAlert.UseVisualStyleBackColor = true;
+            btnTemperatureAlert.Click += btnTemperatureAlert_Click;
             // lblStudentHeader
             // 
             lblStudentHeader.AutoSize = true;
@@ -193,7 +277,7 @@ namespace UgnayDesktop.Forms
             lblStudentHeader.Name = "lblStudentHeader";
             lblStudentHeader.Size = new Size(243, 30);
             lblStudentHeader.TabIndex = 14;
-            lblStudentHeader.Text = "Add Student Information";
+            lblStudentHeader.Text = "Student Cards";
             // 
             // labelFullName
             // 
@@ -203,6 +287,7 @@ namespace UgnayDesktop.Forms
             labelFullName.Size = new Size(107, 30);
             labelFullName.TabIndex = 15;
             labelFullName.Text = "Full Name";
+            labelFullName.Visible = false;
             // 
             // txtStudentFullName
             // 
@@ -210,6 +295,7 @@ namespace UgnayDesktop.Forms
             txtStudentFullName.Name = "txtStudentFullName";
             txtStudentFullName.Size = new Size(324, 35);
             txtStudentFullName.TabIndex = 16;
+            txtStudentFullName.Visible = false;
             // 
             // labelAge
             // 
@@ -219,6 +305,7 @@ namespace UgnayDesktop.Forms
             labelAge.Size = new Size(50, 30);
             labelAge.TabIndex = 17;
             labelAge.Text = "Age";
+            labelAge.Visible = false;
             // 
             // txtStudentAge
             // 
@@ -226,6 +313,7 @@ namespace UgnayDesktop.Forms
             txtStudentAge.Name = "txtStudentAge";
             txtStudentAge.Size = new Size(110, 35);
             txtStudentAge.TabIndex = 18;
+            txtStudentAge.Visible = false;
             // 
             // labelSex
             // 
@@ -235,6 +323,7 @@ namespace UgnayDesktop.Forms
             labelSex.Size = new Size(45, 30);
             labelSex.TabIndex = 19;
             labelSex.Text = "Sex";
+            labelSex.Visible = false;
             // 
             // cmbStudentSex
             // 
@@ -245,10 +334,11 @@ namespace UgnayDesktop.Forms
             cmbStudentSex.Name = "cmbStudentSex";
             cmbStudentSex.Size = new Size(143, 38);
             cmbStudentSex.TabIndex = 20;
+            cmbStudentSex.Visible = false;
             // 
             // btnAddStudent
             // 
-            btnAddStudent.Location = new Point(607, 234);
+            btnAddStudent.Location = new Point(170, 161);
             btnAddStudent.Name = "btnAddStudent";
             btnAddStudent.Size = new Size(154, 40);
             btnAddStudent.TabIndex = 21;
@@ -264,7 +354,7 @@ namespace UgnayDesktop.Forms
             dgvStudents.RowHeadersWidth = 72;
             dgvStudents.Size = new Size(1160, 189);
             dgvStudents.TabIndex = 22;
-            dgvStudents.SelectionChanged += dgvStudents_SelectionChanged;
+            dgvStudents.Visible = false;
             // 
             // lblConnectionStatus
             // 
@@ -274,6 +364,7 @@ namespace UgnayDesktop.Forms
             lblConnectionStatus.Size = new Size(124, 30);
             lblConnectionStatus.TabIndex = 23;
             lblConnectionStatus.Text = "Connection:";
+            lblConnectionStatus.Visible = false;
             // 
             // lblSelectedStudent
             // 
@@ -283,6 +374,20 @@ namespace UgnayDesktop.Forms
             lblSelectedStudent.Size = new Size(173, 30);
             lblSelectedStudent.TabIndex = 24;
             lblSelectedStudent.Text = "Selected Student:";
+            lblSelectedStudent.Visible = false;
+            // 
+            // flpStudentCards
+            // 
+            flpStudentCards.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            flpStudentCards.AutoScroll = true;
+            flpStudentCards.BackColor = Color.FromArgb(245, 247, 250);
+            flpStudentCards.FlowDirection = FlowDirection.LeftToRight;
+            flpStudentCards.Location = new Point(12, 206);
+            flpStudentCards.Name = "flpStudentCards";
+            flpStudentCards.Padding = new Padding(10);
+            flpStudentCards.Size = new Size(1160, 702);
+            flpStudentCards.TabIndex = 25;
+            flpStudentCards.WrapContents = true;
             // 
             // TeacherDashboard
             // 
@@ -293,6 +398,8 @@ namespace UgnayDesktop.Forms
             Controls.Add(lblConnectionStatus);
             Controls.Add(dgvStudents);
             Controls.Add(btnAddStudent);
+            Controls.Add(flpStudentCards);
+            Controls.Add(grpManualAlerts);
             Controls.Add(cmbStudentSex);
             Controls.Add(labelSex);
             Controls.Add(txtStudentAge);
@@ -300,9 +407,6 @@ namespace UgnayDesktop.Forms
             Controls.Add(txtStudentFullName);
             Controls.Add(labelFullName);
             Controls.Add(lblStudentHeader);
-            Controls.Add(btnTwilioTest);
-            Controls.Add(btnTwilioLink);
-            Controls.Add(btnTwilioConfigCheck);
             Controls.Add(lblTeacherPhone);
             Controls.Add(btnSaveProfile);
             Controls.Add(txtTeacherPhoneSuffix);
@@ -314,10 +418,13 @@ namespace UgnayDesktop.Forms
             Controls.Add(btnLogout);
             Controls.Add(lblDecisionStatus);
             Controls.Add(dgvSensorReadings);
+            dgvSensorReadings.Visible = false;
             Name = "TeacherDashboard";
             Text = "Teacher Dashboard";
             ((System.ComponentModel.ISupportInitialize)dgvSensorReadings).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvStudents).EndInit();
+            grpManualAlerts.ResumeLayout(false);
+            grpManualAlerts.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -335,9 +442,16 @@ namespace UgnayDesktop.Forms
         private TextBox txtTeacherPhoneSuffix;
         private Button btnSaveProfile;
         private Label lblTeacherPhone;
-        private Button btnTwilioConfigCheck;
-        private Button btnTwilioLink;
-        private Button btnTwilioTest;
+        private GroupBox grpManualAlerts;
+        private Label lblBpmAlert;
+        private TextBox txtBpmAlertMessage;
+        private Button btnBpmAlert;
+        private Label lblSweatnessAlert;
+        private TextBox txtSweatnessAlertMessage;
+        private Button btnSweatnessAlert;
+        private Label lblTemperatureAlert;
+        private TextBox txtTemperatureAlertMessage;
+        private Button btnTemperatureAlert;
         private Label lblStudentHeader;
         private Label labelFullName;
         private TextBox txtStudentFullName;
@@ -349,5 +463,13 @@ namespace UgnayDesktop.Forms
         private DataGridView dgvStudents;
         private Label lblConnectionStatus;
         private Label lblSelectedStudent;
+        private FlowLayoutPanel flpStudentCards;
     }
 }
+
+
+
+
+
+
+

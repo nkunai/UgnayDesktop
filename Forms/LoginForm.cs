@@ -1,4 +1,4 @@
-﻿using UgnayDesktop.Services;
+using UgnayDesktop.Services;
 using UgnayDesktop.Models;
 using System.Drawing.Drawing2D;
 
@@ -6,8 +6,8 @@ namespace UgnayDesktop.Forms;
 
 public partial class LoginForm : Form
 {
-    private const string Stage3Username = "stage3";
-    private const string Stage3Password = "stage3";
+
+    private bool _isPasswordVisible;
 
     public LoginForm()
     {
@@ -29,28 +29,21 @@ public partial class LoginForm : Form
         txtUsername.Resize += (_, _) => RoundTextBox(txtUsername, 12);
         txtPassword.Resize += (_, _) => RoundTextBox(txtPassword, 12);
 
+        btnTogglePassword.BackColor = ColorTranslator.FromHtml("#D9D9D9");
+        btnTogglePassword.ForeColor = Color.Black;
+
         btnLogin.BackColor = ColorTranslator.FromHtml("#D9D9D9");
         btnLogin.ForeColor = Color.Black;
         btnLogin.CornerRadius = 18;
-
-        txtUsername.Text = Stage3Username;
-        txtPassword.Text = Stage3Password;
-        AddStage3Hint();
+        SetPasswordVisibility(false);
         LoadLogo();
     }
 
-    private void AddStage3Hint()
+    private void SetPasswordVisibility(bool visible)
     {
-        var hint = new Label
-        {
-            AutoSize = true,
-            Location = new Point(850, 520),
-            ForeColor = ColorTranslator.FromHtml("#545454"),
-            Text = $"Stage 3 test login: {Stage3Username} / {Stage3Password}"
-        };
-
-        Controls.Add(hint);
-        hint.BringToFront();
+        _isPasswordVisible = visible;
+        txtPassword.UseSystemPasswordChar = !visible;
+        btnTogglePassword.Text = visible ? "Hide" : "Show";
     }
 
     private void LoadLogo()
@@ -81,24 +74,8 @@ public partial class LoginForm : Form
     {
         var username = txtUsername.Text.Trim();
         var password = txtPassword.Text.Trim();
-
-        User? user;
-        if (string.Equals(username, Stage3Username, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(password, Stage3Password, StringComparison.Ordinal))
-        {
-            user = new User
-            {
-                Id = -999,
-                Username = Stage3Username,
-                Role = "Teacher",
-                FullName = "Stage 3 Tester"
-            };
-        }
-        else
-        {
-            var auth = new AuthService();
-            user = auth.Login(username, password);
-        }
+        var auth = new AuthService();
+        var user = auth.Login(username, password);
 
         if (user == null)
         {
@@ -136,8 +113,14 @@ public partial class LoginForm : Form
     {
         txtUsername.Clear();
         txtPassword.Clear();
+        SetPasswordVisibility(false);
         Show();
         Activate();
+    }
+
+    private void btnTogglePassword_Click(object sender, EventArgs e)
+    {
+        SetPasswordVisibility(!_isPasswordVisible);
     }
 
     private void txtPassword_TextChanged(object sender, EventArgs e)
@@ -170,4 +153,5 @@ public partial class LoginForm : Form
 
     }
 }
+
 
