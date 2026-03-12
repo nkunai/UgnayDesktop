@@ -81,6 +81,9 @@ partial class LoginForm
         // 
         // btnLogin
         // 
+        btnLogin.BackColor = Color.FromArgb(217, 217, 217);
+        btnLogin.FlatStyle = FlatStyle.Flat;
+        btnLogin.ForeColor = Color.Black;
         btnLogin.Location = new Point(939, 464);
         btnLogin.Name = "btnLogin";
         btnLogin.Size = new Size(131, 40);
@@ -114,6 +117,7 @@ partial class LoginForm
         AcceptButton = btnLogin;
         AutoScaleDimensions = new SizeF(12F, 30F);
         AutoScaleMode = AutoScaleMode.Font;
+        BackColor = Color.CornflowerBlue;
         ClientSize = new Size(1243, 701);
         Controls.Add(pictureBoxLogo);
         Controls.Add(label3);
