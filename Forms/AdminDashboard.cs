@@ -1,4 +1,4 @@
-﻿using UgnayDesktop.Controls;
+using UgnayDesktop.Controls;
 using UgnayDesktop.Data;
 using UgnayDesktop.Models;
 using UgnayDesktop.Services;
@@ -309,15 +309,8 @@ namespace UgnayDesktop.Forms
 
         private void CreateThemeToggleControl()
         {
-            _themeToggleCheckBox = new CheckBox
-            {
-                Location = new Point(814, 17),
-                Size = new Size(123, 30),
-                Text = "Dark theme",
-                Checked = _isDarkTheme,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
-
+            _themeToggleCheckBox = chkDarkTheme;
+            _themeToggleCheckBox.Checked = _isDarkTheme;
             _themeToggleCheckBox.CheckedChanged += (_, _) =>
             {
                 if (_isThemeApplying)
@@ -331,72 +324,37 @@ namespace UgnayDesktop.Forms
                 ApplyModernTheme();
             };
 
-            Controls.Add(_themeToggleCheckBox);
-            _themeToggleCheckBox.BringToFront();
-
             _uiToolTip.SetToolTip(_themeToggleCheckBox, "Switch dashboard between light and dark themes.");
         }
-
         private void CreateKpiCards()
         {
-            var panel = new FlowLayoutPanel
-            {
-                Location = new Point(339, 262),
-                Size = new Size(477, 32),
-                BackColor = Color.Transparent,
-                WrapContents = false,
-                FlowDirection = FlowDirection.LeftToRight,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            };
-
-            _kpiConnectedStudentsLabel = CreateKpiChip("Connected students: -", 116);
-            _kpiActiveAlertsLabel = CreateKpiChip("Active alerts: -", 108);
-            _kpiLastGestureLabel = CreateKpiChip("Last gesture: -", 118);
-            _kpiAvgConfidenceLabel = CreateKpiChip("Avg conf: -", 116);
-
-            panel.Controls.Add(_kpiConnectedStudentsLabel);
-            panel.Controls.Add(_kpiActiveAlertsLabel);
-            panel.Controls.Add(_kpiLastGestureLabel);
-            panel.Controls.Add(_kpiAvgConfidenceLabel);
-
-            Controls.Add(panel);
-            panel.BringToFront();
+            _kpiConnectedStudentsLabel = lblKpiConnectedStudents;
+            _kpiActiveAlertsLabel = lblKpiActiveAlerts;
+            _kpiLastGestureLabel = lblKpiLastGesture;
+            _kpiAvgConfidenceLabel = lblKpiAvgConfidence;
         }
-
         private void CreateSensorFilterControls()
         {
-            _sensorSearchTextBox = new TextBox
-            {
-                Location = new Point(339, 300),
-                Size = new Size(95, 31),
-                PlaceholderText = "Search",
-            };
+            _sensorSearchTextBox = txtSensorSearch;
+            _sensorStudentComboBox = cmbSensorStudent;
+            _sensorGestureComboBox = cmbSensorGesture;
+            _sensorWindowComboBox = cmbSensorWindow;
+            _sensorAlertOnlyCheckBox = chkSensorAlertOnly;
+            _sensorClearFiltersButton = btnSensorReset;
+
             _sensorSearchTextBox.TextChanged += (_, _) =>
             {
                 _sensorSearchTerm = _sensorSearchTextBox.Text.Trim();
                 LoadSensorReadings();
             };
 
-            _sensorStudentComboBox = new ComboBox
-            {
-                Location = new Point(436, 300),
-                Size = new Size(85, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-            };
             _sensorStudentComboBox.SelectedIndexChanged += (_, _) =>
             {
                 _sensorStudentDeviceFilter = _sensorStudentComboBox.SelectedValue as string;
                 LoadSensorReadings();
             };
 
-            _sensorGestureComboBox = new ComboBox
-            {
-                Location = new Point(523, 300),
-                Size = new Size(75, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-            };
+            _sensorGestureComboBox.Items.Clear();
             _sensorGestureComboBox.Items.AddRange(new object[]
             {
                 "All Gestures",
@@ -411,12 +369,7 @@ namespace UgnayDesktop.Forms
                 LoadSensorReadings();
             };
 
-            _sensorWindowComboBox = new ComboBox
-            {
-                Location = new Point(600, 300),
-                Size = new Size(75, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-            };
+            _sensorWindowComboBox.Items.Clear();
             _sensorWindowComboBox.Items.AddRange(new object[]
             {
                 "30m",
@@ -437,26 +390,12 @@ namespace UgnayDesktop.Forms
                 LoadSensorReadings();
             };
 
-            _sensorAlertOnlyCheckBox = new CheckBox
-            {
-                Location = new Point(679, 302),
-                Size = new Size(64, 28),
-                Text = "Alert",
-                AutoSize = false,
-            };
             _sensorAlertOnlyCheckBox.CheckedChanged += (_, _) =>
             {
                 _sensorAlertOnly = _sensorAlertOnlyCheckBox.Checked;
                 LoadSensorReadings();
             };
 
-            _sensorClearFiltersButton = new Button
-            {
-                Location = new Point(746, 298),
-                Size = new Size(65, 35),
-                Text = "Reset",
-                UseVisualStyleBackColor = false,
-            };
             _sensorClearFiltersButton.Click += (_, _) =>
             {
                 _sensorSearchTextBox.Text = string.Empty;
@@ -466,27 +405,12 @@ namespace UgnayDesktop.Forms
                 _sensorAlertOnlyCheckBox.Checked = false;
             };
 
-            Controls.Add(_sensorSearchTextBox);
-            Controls.Add(_sensorStudentComboBox);
-            Controls.Add(_sensorGestureComboBox);
-            Controls.Add(_sensorWindowComboBox);
-            Controls.Add(_sensorAlertOnlyCheckBox);
-            Controls.Add(_sensorClearFiltersButton);
-
-            _sensorSearchTextBox.BringToFront();
-            _sensorStudentComboBox.BringToFront();
-            _sensorGestureComboBox.BringToFront();
-            _sensorWindowComboBox.BringToFront();
-            _sensorAlertOnlyCheckBox.BringToFront();
-            _sensorClearFiltersButton.BringToFront();
-
             _uiToolTip.SetToolTip(_sensorSearchTextBox, "Search by device or gesture.");
             _uiToolTip.SetToolTip(_sensorStudentComboBox, "Filter readings by student device.");
             _uiToolTip.SetToolTip(_sensorGestureComboBox, "Filter readings by gesture type.");
             _uiToolTip.SetToolTip(_sensorWindowComboBox, "Filter readings by time range.");
             _uiToolTip.SetToolTip(_sensorAlertOnlyCheckBox, "Show only readings that trigger an alert condition.");
         }
-
         private void PopulateSensorStudentFilterOptions(AppDbContext db)
         {
             if (_sensorStudentComboBox == null)
@@ -526,19 +450,15 @@ namespace UgnayDesktop.Forms
 
         private void CreateTrendCharts()
         {
-            _vitalsTrendChart = CreateMiniTrendChart(new Point(821, 262), new Size(255, 36));
-            _confidenceTrendChart = CreateMiniTrendChart(new Point(821, 300), new Size(255, 36));
+            _vitalsTrendChart = pnlVitalsTrend;
+            _confidenceTrendChart = pnlConfidenceTrend;
 
-            Controls.Add(_vitalsTrendChart);
-            Controls.Add(_confidenceTrendChart);
-
-            _vitalsTrendChart.BringToFront();
-            _confidenceTrendChart.BringToFront();
+            _vitalsTrendChart.Paint += RenderMiniTrend;
+            _confidenceTrendChart.Paint += RenderMiniTrend;
 
             _uiToolTip.SetToolTip(_vitalsTrendChart, "Vitals trend (HR / SpO2 / Temp), last 30 minutes.");
             _uiToolTip.SetToolTip(_confidenceTrendChart, "Gesture confidence trend, last 30 minutes.");
         }
-
         private static Panel CreateMiniTrendChart(Point location, Size size)
         {
             var panel = new Panel
@@ -720,25 +640,12 @@ namespace UgnayDesktop.Forms
 
         private void CreateAlertHistoryControls()
         {
-            dgvSensorReadings.Size = new Size(474, 595);
-            dgvSensorReadings.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            _alertHistoryStatusComboBox = cmbAlertHistoryStatus;
+            _alertHistoryRefreshButton = btnAlertHistoryRefresh;
+            _alertHistoryGrid = dgvAlertHistory;
+            _alertHistoryCountLabel = lblAlertHistoryCount;
 
-            var titleLabel = new Label
-            {
-                Location = new Point(821, 338),
-                Size = new Size(118, 30),
-                Text = "Alert History",
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
-
-            _alertHistoryStatusComboBox = new ComboBox
-            {
-                Location = new Point(941, 336),
-                Size = new Size(132, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
+            _alertHistoryStatusComboBox.Items.Clear();
             _alertHistoryStatusComboBox.Items.AddRange(new object[]
             {
                 "All Statuses",
@@ -750,58 +657,13 @@ namespace UgnayDesktop.Forms
             _alertHistoryStatusComboBox.SelectedIndex = 0;
             _alertHistoryStatusComboBox.SelectedIndexChanged += (_, _) => LoadAlertHistory();
 
-            _alertHistoryRefreshButton = new Button
-            {
-                Location = new Point(999, 970),
-                Size = new Size(77, 35),
-                Text = "Refresh",
-                UseVisualStyleBackColor = false,
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-            };
             _alertHistoryRefreshButton.Click += (_, _) => LoadAlertHistory();
-
-            _alertHistoryGrid = new DataGridView
-            {
-                Location = new Point(821, 372),
-                Size = new Size(255, 561),
-                ReadOnly = true,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                AllowUserToResizeRows = false,
-                MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                RowHeadersVisible = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
-                BorderStyle = BorderStyle.FixedSingle,
-                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Right,
-            };
             _alertHistoryGrid.SizeChanged += (_, _) => ApplyAlertHistoryColumnVisibility();
-
-            _alertHistoryCountLabel = new Label
-            {
-                Location = new Point(821, 936),
-                Size = new Size(168, 30),
-                Text = "0 alerts",
-                TextAlign = ContentAlignment.MiddleLeft,
-                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-            };
-
-            Controls.Add(titleLabel);
-            Controls.Add(_alertHistoryStatusComboBox);
-            Controls.Add(_alertHistoryRefreshButton);
-            Controls.Add(_alertHistoryGrid);
-            Controls.Add(_alertHistoryCountLabel);
-
-            titleLabel.BringToFront();
-            _alertHistoryStatusComboBox.BringToFront();
-            _alertHistoryRefreshButton.BringToFront();
-            _alertHistoryCountLabel.BringToFront();
 
             _uiToolTip.SetToolTip(_alertHistoryStatusComboBox, "Filter alert history by delivery status.");
             _uiToolTip.SetToolTip(_alertHistoryRefreshButton, "Refresh alert history now.");
             _uiToolTip.SetToolTip(_alertHistoryGrid, "Latest alert delivery attempts from outbox.");
         }
-
         private void LoadAlertHistory()
         {
             if (_alertHistoryGrid == null || _alertHistoryStatusComboBox == null || _alertHistoryCountLabel == null)
@@ -1519,6 +1381,8 @@ namespace UgnayDesktop.Forms
         }
     }
 }
+
+
 
 
 

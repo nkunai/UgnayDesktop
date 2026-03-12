@@ -10,7 +10,7 @@ namespace UgnayDesktop.Forms
         /// <summary>
         /// Clean up any resources being used.
         /// </summary>
-        /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
+        /// <param name="disposing">true if managed resources are being disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && (components != null))
@@ -49,12 +49,31 @@ namespace UgnayDesktop.Forms
             btnDeleteUser = new Button();
             lblSelectedUser = new Label();
             btnLogout = new Button();
-            btnMqttTest = new Button();
+            chkDarkTheme = new CheckBox();
+            lblKpiConnectedStudents = new Label();
+            lblKpiActiveAlerts = new Label();
+            lblKpiLastGesture = new Label();
+            lblKpiAvgConfidence = new Label();
+            txtSensorSearch = new TextBox();
+            cmbSensorStudent = new ComboBox();
+            cmbSensorGesture = new ComboBox();
+            cmbSensorWindow = new ComboBox();
+            chkSensorAlertOnly = new CheckBox();
+            btnSensorReset = new Button();
+            pnlVitalsTrend = new Panel();
+            pnlConfidenceTrend = new Panel();
             dgvSensorReadings = new DataGridView();
+            lblAlertHistoryTitle = new Label();
+            cmbAlertHistoryStatus = new ComboBox();
+            btnAlertHistoryRefresh = new Button();
+            lblAlertHistoryCount = new Label();
+            dgvAlertHistory = new DataGridView();
             lblDecisionStatus = new Label();
+            btnMqttTest = new Button();
             ((System.ComponentModel.ISupportInitialize)dgvTeachers).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvStudents).BeginInit();
             ((System.ComponentModel.ISupportInitialize)dgvSensorReadings).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)dgvAlertHistory).BeginInit();
             SuspendLayout();
             // 
             // labelTeachers
@@ -168,7 +187,7 @@ namespace UgnayDesktop.Forms
             lblTeacherPhone.AutoSize = true;
             lblTeacherPhone.Location = new Point(12, 650);
             lblTeacherPhone.Name = "lblTeacherPhone";
-            lblTeacherPhone.Size = new Size(156, 30);
+            lblTeacherPhone.Size = new Size(149, 30);
             lblTeacherPhone.TabIndex = 12;
             lblTeacherPhone.Text = "Teacher Phone";
             // 
@@ -279,42 +298,238 @@ namespace UgnayDesktop.Forms
             btnLogout.UseVisualStyleBackColor = true;
             btnLogout.Click += btnLogout_Click;
             // 
-            // btnMqttTest
+            // chkDarkTheme
             // 
-            btnMqttTest.Location = new Point(339, 969);
-            btnMqttTest.Name = "btnMqttTest";
-            btnMqttTest.Size = new Size(131, 40);
-            btnMqttTest.TabIndex = 25;
-            btnMqttTest.Text = "MQTT Test";
-            btnMqttTest.UseVisualStyleBackColor = true;
-            btnMqttTest.Click += btnMqttTest_Click;
+            chkDarkTheme.AutoSize = true;
+            chkDarkTheme.Location = new Point(816, 18);
+            chkDarkTheme.Name = "chkDarkTheme";
+            chkDarkTheme.Size = new Size(147, 34);
+            chkDarkTheme.TabIndex = 25;
+            chkDarkTheme.Text = "Dark theme";
+            chkDarkTheme.UseVisualStyleBackColor = true;
+            // 
+            // lblKpiConnectedStudents
+            // 
+            lblKpiConnectedStudents.BorderStyle = BorderStyle.FixedSingle;
+            lblKpiConnectedStudents.Location = new Point(424, 383);
+            lblKpiConnectedStudents.Name = "lblKpiConnectedStudents";
+            lblKpiConnectedStudents.Padding = new Padding(8, 0, 8, 0);
+            lblKpiConnectedStudents.Size = new Size(150, 32);
+            lblKpiConnectedStudents.TabIndex = 26;
+            lblKpiConnectedStudents.Text = "Connected students: -";
+            lblKpiConnectedStudents.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // lblKpiActiveAlerts
+            // 
+            lblKpiActiveAlerts.BorderStyle = BorderStyle.FixedSingle;
+            lblKpiActiveAlerts.Location = new Point(580, 383);
+            lblKpiActiveAlerts.Name = "lblKpiActiveAlerts";
+            lblKpiActiveAlerts.Padding = new Padding(8, 0, 8, 0);
+            lblKpiActiveAlerts.Size = new Size(136, 32);
+            lblKpiActiveAlerts.TabIndex = 27;
+            lblKpiActiveAlerts.Text = "Active alerts: -";
+            lblKpiActiveAlerts.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // lblKpiLastGesture
+            // 
+            lblKpiLastGesture.BorderStyle = BorderStyle.FixedSingle;
+            lblKpiLastGesture.Location = new Point(722, 383);
+            lblKpiLastGesture.Name = "lblKpiLastGesture";
+            lblKpiLastGesture.Padding = new Padding(8, 0, 8, 0);
+            lblKpiLastGesture.Size = new Size(136, 32);
+            lblKpiLastGesture.TabIndex = 28;
+            lblKpiLastGesture.Text = "Last gesture: -";
+            lblKpiLastGesture.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // lblKpiAvgConfidence
+            // 
+            lblKpiAvgConfidence.BorderStyle = BorderStyle.FixedSingle;
+            lblKpiAvgConfidence.Location = new Point(864, 383);
+            lblKpiAvgConfidence.Name = "lblKpiAvgConfidence";
+            lblKpiAvgConfidence.Padding = new Padding(8, 0, 8, 0);
+            lblKpiAvgConfidence.Size = new Size(136, 32);
+            lblKpiAvgConfidence.TabIndex = 29;
+            lblKpiAvgConfidence.Text = "Avg conf: -";
+            lblKpiAvgConfidence.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // txtSensorSearch
+            // 
+            txtSensorSearch.Location = new Point(424, 421);
+            txtSensorSearch.Name = "txtSensorSearch";
+            txtSensorSearch.PlaceholderText = "Search";
+            txtSensorSearch.Size = new Size(95, 35);
+            txtSensorSearch.TabIndex = 30;
+            // 
+            // cmbSensorStudent
+            // 
+            cmbSensorStudent.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbSensorStudent.FormattingEnabled = true;
+            cmbSensorStudent.Location = new Point(521, 420);
+            cmbSensorStudent.Name = "cmbSensorStudent";
+            cmbSensorStudent.Size = new Size(85, 38);
+            cmbSensorStudent.TabIndex = 31;
+            // 
+            // cmbSensorGesture
+            // 
+            cmbSensorGesture.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbSensorGesture.FormattingEnabled = true;
+            cmbSensorGesture.Location = new Point(608, 420);
+            cmbSensorGesture.Name = "cmbSensorGesture";
+            cmbSensorGesture.Size = new Size(75, 38);
+            cmbSensorGesture.TabIndex = 32;
+            // 
+            // cmbSensorWindow
+            // 
+            cmbSensorWindow.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbSensorWindow.FormattingEnabled = true;
+            cmbSensorWindow.Location = new Point(685, 420);
+            cmbSensorWindow.Name = "cmbSensorWindow";
+            cmbSensorWindow.Size = new Size(75, 38);
+            cmbSensorWindow.TabIndex = 33;
+            // 
+            // chkSensorAlertOnly
+            // 
+            chkSensorAlertOnly.AutoSize = true;
+            chkSensorAlertOnly.Location = new Point(764, 422);
+            chkSensorAlertOnly.Name = "chkSensorAlertOnly";
+            chkSensorAlertOnly.Size = new Size(83, 34);
+            chkSensorAlertOnly.TabIndex = 34;
+            chkSensorAlertOnly.Text = "Alert";
+            chkSensorAlertOnly.UseVisualStyleBackColor = true;
+            // 
+            // btnSensorReset
+            // 
+            btnSensorReset.Location = new Point(864, 418);
+            btnSensorReset.Name = "btnSensorReset";
+            btnSensorReset.Size = new Size(82, 40);
+            btnSensorReset.TabIndex = 35;
+            btnSensorReset.Text = "Reset";
+            btnSensorReset.UseVisualStyleBackColor = true;
+            // 
+            // pnlVitalsTrend
+            // 
+            pnlVitalsTrend.BorderStyle = BorderStyle.FixedSingle;
+            pnlVitalsTrend.Location = new Point(982, 422);
+            pnlVitalsTrend.Name = "pnlVitalsTrend";
+            pnlVitalsTrend.Size = new Size(255, 36);
+            pnlVitalsTrend.TabIndex = 36;
+            // 
+            // pnlConfidenceTrend
+            // 
+            pnlConfidenceTrend.BorderStyle = BorderStyle.FixedSingle;
+            pnlConfidenceTrend.Location = new Point(1255, 422);
+            pnlConfidenceTrend.Name = "pnlConfidenceTrend";
+            pnlConfidenceTrend.Size = new Size(255, 36);
+            pnlConfidenceTrend.TabIndex = 37;
             // 
             // dgvSensorReadings
             // 
             dgvSensorReadings.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            dgvSensorReadings.Location = new Point(339, 338);
+            dgvSensorReadings.Location = new Point(424, 483);
             dgvSensorReadings.Name = "dgvSensorReadings";
             dgvSensorReadings.RowHeadersWidth = 72;
-            dgvSensorReadings.Size = new Size(737, 595);
-            dgvSensorReadings.TabIndex = 26;
+            dgvSensorReadings.Size = new Size(737, 591);
+            dgvSensorReadings.TabIndex = 38;
+            // 
+            // lblAlertHistoryTitle
+            // 
+            lblAlertHistoryTitle.AutoSize = true;
+            lblAlertHistoryTitle.Location = new Point(1181, 483);
+            lblAlertHistoryTitle.Name = "lblAlertHistoryTitle";
+            lblAlertHistoryTitle.Size = new Size(128, 30);
+            lblAlertHistoryTitle.TabIndex = 39;
+            lblAlertHistoryTitle.Text = "Alert History";
+            // 
+            // cmbAlertHistoryStatus
+            // 
+            cmbAlertHistoryStatus.DropDownStyle = ComboBoxStyle.DropDownList;
+            cmbAlertHistoryStatus.FormattingEnabled = true;
+            cmbAlertHistoryStatus.Location = new Point(1305, 480);
+            cmbAlertHistoryStatus.Name = "cmbAlertHistoryStatus";
+            cmbAlertHistoryStatus.Size = new Size(131, 38);
+            cmbAlertHistoryStatus.TabIndex = 40;
+            // 
+            // btnAlertHistoryRefresh
+            // 
+            btnAlertHistoryRefresh.Location = new Point(1442, 479);
+            btnAlertHistoryRefresh.Name = "btnAlertHistoryRefresh";
+            btnAlertHistoryRefresh.Size = new Size(102, 40);
+            btnAlertHistoryRefresh.TabIndex = 41;
+            btnAlertHistoryRefresh.Text = "Refresh";
+            btnAlertHistoryRefresh.UseVisualStyleBackColor = true;
+            // 
+            // lblAlertHistoryCount
+            // 
+            lblAlertHistoryCount.Location = new Point(1550, 484);
+            lblAlertHistoryCount.Name = "lblAlertHistoryCount";
+            lblAlertHistoryCount.Size = new Size(48, 30);
+            lblAlertHistoryCount.TabIndex = 42;
+            lblAlertHistoryCount.Text = "0";
+            lblAlertHistoryCount.TextAlign = ContentAlignment.MiddleRight;
+            // 
+            // dgvAlertHistory
+            // 
+            dgvAlertHistory.AllowUserToAddRows = false;
+            dgvAlertHistory.AllowUserToDeleteRows = false;
+            dgvAlertHistory.AllowUserToResizeRows = false;
+            dgvAlertHistory.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            dgvAlertHistory.Location = new Point(1181, 525);
+            dgvAlertHistory.MultiSelect = false;
+            dgvAlertHistory.Name = "dgvAlertHistory";
+            dgvAlertHistory.ReadOnly = true;
+            dgvAlertHistory.RowHeadersVisible = false;
+            dgvAlertHistory.RowHeadersWidth = 72;
+            dgvAlertHistory.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvAlertHistory.Size = new Size(417, 549);
+            dgvAlertHistory.TabIndex = 43;
             // 
             // lblDecisionStatus
             // 
             lblDecisionStatus.AutoSize = true;
-            lblDecisionStatus.Location = new Point(339, 936);
+            lblDecisionStatus.Location = new Point(431, 1126);
             lblDecisionStatus.Name = "lblDecisionStatus";
             lblDecisionStatus.Size = new Size(92, 30);
-            lblDecisionStatus.TabIndex = 27;
+            lblDecisionStatus.TabIndex = 44;
             lblDecisionStatus.Text = "Decision";
+            // 
+            // btnMqttTest
+            // 
+            btnMqttTest.Location = new Point(431, 1159);
+            btnMqttTest.Name = "btnMqttTest";
+            btnMqttTest.Size = new Size(131, 40);
+            btnMqttTest.TabIndex = 45;
+            btnMqttTest.Text = "MQTT Test";
+            btnMqttTest.UseVisualStyleBackColor = true;
+            btnMqttTest.Click += btnMqttTest_Click;
             // 
             // AdminDashboard
             // 
             AutoScaleDimensions = new SizeF(12F, 30F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1088, 1024);
-            Controls.Add(lblDecisionStatus);
-            Controls.Add(dgvSensorReadings);
+            AutoScroll = true;
+            AutoScrollMinSize = new Size(0, 1141);
+            ClientSize = new Size(1719, 1141);
             Controls.Add(btnMqttTest);
+            Controls.Add(lblDecisionStatus);
+            Controls.Add(dgvAlertHistory);
+            Controls.Add(lblAlertHistoryCount);
+            Controls.Add(btnAlertHistoryRefresh);
+            Controls.Add(cmbAlertHistoryStatus);
+            Controls.Add(lblAlertHistoryTitle);
+            Controls.Add(dgvSensorReadings);
+            Controls.Add(pnlConfidenceTrend);
+            Controls.Add(pnlVitalsTrend);
+            Controls.Add(btnSensorReset);
+            Controls.Add(chkSensorAlertOnly);
+            Controls.Add(cmbSensorWindow);
+            Controls.Add(cmbSensorGesture);
+            Controls.Add(cmbSensorStudent);
+            Controls.Add(txtSensorSearch);
+            Controls.Add(lblKpiAvgConfidence);
+            Controls.Add(lblKpiLastGesture);
+            Controls.Add(lblKpiActiveAlerts);
+            Controls.Add(lblKpiConnectedStudents);
+            Controls.Add(chkDarkTheme);
             Controls.Add(btnLogout);
             Controls.Add(lblSelectedUser);
             Controls.Add(btnDeleteUser);
@@ -345,6 +560,7 @@ namespace UgnayDesktop.Forms
             ((System.ComponentModel.ISupportInitialize)dgvTeachers).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvStudents).EndInit();
             ((System.ComponentModel.ISupportInitialize)dgvSensorReadings).EndInit();
+            ((System.ComponentModel.ISupportInitialize)dgvAlertHistory).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
@@ -376,8 +592,28 @@ namespace UgnayDesktop.Forms
         private Button btnDeleteUser;
         private Label lblSelectedUser;
         private Button btnLogout;
-        private Button btnMqttTest;
+        private CheckBox chkDarkTheme;
+        private Label lblKpiConnectedStudents;
+        private Label lblKpiActiveAlerts;
+        private Label lblKpiLastGesture;
+        private Label lblKpiAvgConfidence;
+        private TextBox txtSensorSearch;
+        private ComboBox cmbSensorStudent;
+        private ComboBox cmbSensorGesture;
+        private ComboBox cmbSensorWindow;
+        private CheckBox chkSensorAlertOnly;
+        private Button btnSensorReset;
+        private Panel pnlVitalsTrend;
+        private Panel pnlConfidenceTrend;
         private DataGridView dgvSensorReadings;
+        private Label lblAlertHistoryTitle;
+        private ComboBox cmbAlertHistoryStatus;
+        private Button btnAlertHistoryRefresh;
+        private Label lblAlertHistoryCount;
+        private DataGridView dgvAlertHistory;
         private Label lblDecisionStatus;
+        private Button btnMqttTest;
     }
 }
+
+

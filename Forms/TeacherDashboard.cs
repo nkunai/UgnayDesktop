@@ -1,4 +1,4 @@
-﻿using UgnayDesktop.Controls;
+using UgnayDesktop.Controls;
 using UgnayDesktop.Data;
 using UgnayDesktop.Models;
 using UgnayDesktop.Services;
@@ -8,6 +8,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using System.Drawing.Drawing2D;
+using System.IO;
 
 namespace UgnayDesktop.Forms
 {
@@ -24,6 +25,7 @@ namespace UgnayDesktop.Forms
         private readonly AlertDecisionService _alertDecisionService = new();
         private readonly AlertOutboxService _alertOutboxService = new();
         private readonly GestureQualityService _gestureQualityService = new();
+        private readonly CameraPreviewParser _cameraPreviewParser = new();
         private readonly ToolTip _uiToolTip = new();
         private readonly User _currentTeacher;
 
@@ -75,6 +77,7 @@ namespace UgnayDesktop.Forms
             CreateThemeToggleControl();
             InitializeTelemetryInsightsUi();
             InitializeAlertHistoryUi();
+            InitializeCameraPreviewUi();
 
             ApplyModernTheme();
 
@@ -82,6 +85,7 @@ namespace UgnayDesktop.Forms
             LoadStudents();
             ResetSelectedStudentDisplay();
             UpdateTeacherPhoneLabel();
+            FormClosed += TeacherDashboard_FormClosed;
             Shown += TeacherDashboard_Shown;
         }
 
@@ -137,18 +141,12 @@ namespace UgnayDesktop.Forms
 
             lblSelectedStudent.AutoSize = false;
             lblSelectedStudent.AutoEllipsis = true;
-            lblSelectedStudent.Size = new Size(760, 30);
-            lblSelectedStudent.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             lblConnectionStatus.AutoSize = false;
             lblConnectionStatus.AutoEllipsis = true;
-            lblConnectionStatus.Size = new Size(760, 30);
-            lblConnectionStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             lblDecisionStatus.AutoSize = false;
             lblDecisionStatus.AutoEllipsis = true;
-            lblDecisionStatus.Size = new Size(760, 30);
-            lblDecisionStatus.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
 
             StyleKpiChip(_kpiStudentReadingsLabel, palette);
             StyleKpiChip(_kpiLatestGestureLabel, palette);
@@ -178,6 +176,7 @@ namespace UgnayDesktop.Forms
                 await _mqttService.SubscribeAsync("camera/+/data");
                 await _mqttService.SubscribeAsync("esp32/data");
                 await _mqttService.SubscribeAsync("esp32/+/data");
+                await _mqttService.SubscribeAsync("esp32/+/preview");
             }
             catch (Exception ex)
             {
@@ -363,6 +362,47 @@ namespace UgnayDesktop.Forms
             return query;
         }
 
+        private void InitializeCameraPreviewUi()
+        {
+            picCameraPreview.SizeMode = PictureBoxSizeMode.Zoom;
+            picCameraPreview.WaitOnLoad = false;
+            lblCameraPreviewStatus.AutoEllipsis = true;
+            ResetCameraPreview("Camera preview: select a student");
+
+            _uiToolTip.SetToolTip(picCameraPreview, "Live preview from the selected student's ESP32 camera tracker.");
+            _uiToolTip.SetToolTip(lblCameraPreviewStatus, "Preview status and latest frame timestamp.");
+        }
+
+        private void ResetCameraPreview(string message)
+        {
+            DisposeCameraPreviewImage();
+            lblCameraPreviewStatus.Text = message;
+        }
+
+        private void UpdateCameraPreview(CameraPreviewFrame frame)
+        {
+            using var stream = new MemoryStream(frame.ImageBytes);
+            using var image = Image.FromStream(stream);
+            var bitmap = new Bitmap(image);
+            var previousImage = picCameraPreview.Image;
+            picCameraPreview.Image = bitmap;
+            previousImage?.Dispose();
+
+            var timestamp = frame.TimestampUtc?.ToLocalTime().ToString("g") ?? DateTime.Now.ToString("g");
+            lblCameraPreviewStatus.Text = $"Camera preview updated: {timestamp}";
+        }
+
+        private void DisposeCameraPreviewImage()
+        {
+            var image = picCameraPreview.Image;
+            picCameraPreview.Image = null;
+            image?.Dispose();
+        }
+
+        private void TeacherDashboard_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            DisposeCameraPreviewImage();
+        }
         private void InitializeTelemetryInsightsUi()
         {
             CreateTeacherKpiCards();
@@ -373,15 +413,8 @@ namespace UgnayDesktop.Forms
 
         private void CreateThemeToggleControl()
         {
-            _themeToggleCheckBox = new CheckBox
-            {
-                Location = new Point(912, 17),
-                Size = new Size(123, 30),
-                Text = "Dark theme",
-                Checked = _isDarkTheme,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
-
+            _themeToggleCheckBox = chkDarkTheme;
+            _themeToggleCheckBox.Checked = _isDarkTheme;
             _themeToggleCheckBox.CheckedChanged += (_, _) =>
             {
                 if (_isThemeApplying)
@@ -395,62 +428,30 @@ namespace UgnayDesktop.Forms
                 ApplyModernTheme();
             };
 
-            Controls.Add(_themeToggleCheckBox);
-            _themeToggleCheckBox.BringToFront();
-
             _uiToolTip.SetToolTip(_themeToggleCheckBox, "Switch dashboard between light and dark themes.");
         }
-
         private void CreateTeacherKpiCards()
         {
-            var panel = new FlowLayoutPanel
-            {
-                Location = new Point(756, 80),
-                Size = new Size(416, 86),
-                BackColor = Color.Transparent,
-                WrapContents = true,
-                FlowDirection = FlowDirection.LeftToRight,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
-
-            _kpiStudentReadingsLabel = CreateKpiChip("Connected students: -", 204);
-            _kpiLatestGestureLabel = CreateKpiChip("Last gesture: -", 204);
-            _kpiGestureQualityLabel = CreateKpiChip("Avg confidence: -", 204);
-            _kpiStudentAlertsLabel = CreateKpiChip("Active alerts: -", 204);
-
-            panel.Controls.Add(_kpiStudentReadingsLabel);
-            panel.Controls.Add(_kpiLatestGestureLabel);
-            panel.Controls.Add(_kpiGestureQualityLabel);
-            panel.Controls.Add(_kpiStudentAlertsLabel);
-
-            Controls.Add(panel);
-            panel.BringToFront();
+            _kpiStudentReadingsLabel = lblKpiStudentReadings;
+            _kpiLatestGestureLabel = lblKpiLatestGesture;
+            _kpiGestureQualityLabel = lblKpiGestureQuality;
+            _kpiStudentAlertsLabel = lblKpiStudentAlerts;
         }
-
         private void CreateStudentSensorFilterControls()
         {
-            _studentSensorSearchTextBox = new TextBox
-            {
-                Location = new Point(775, 236),
-                Size = new Size(120, 31),
-                PlaceholderText = "Search",
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
+            _studentSensorSearchTextBox = txtStudentSensorSearch;
+            _studentGestureComboBox = cmbStudentGestureFilter;
+            _studentSensorWindowComboBox = cmbStudentSensorWindow;
+            _studentSensorAlertOnlyCheckBox = chkStudentSensorAlertOnly;
+            _studentFilterClearButton = btnStudentFilterClear;
+
             _studentSensorSearchTextBox.TextChanged += (_, _) =>
             {
                 _studentSensorSearchTerm = _studentSensorSearchTextBox.Text.Trim();
                 LoadSensorReadingsForSelectedStudent();
             };
 
-            _studentGestureComboBox = new ComboBox
-            {
-                Location = new Point(901, 236),
-                Size = new Size(88, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
+            _studentGestureComboBox.Items.Clear();
             _studentGestureComboBox.Items.AddRange(new object[]
             {
                 "All Gestures",
@@ -465,13 +466,7 @@ namespace UgnayDesktop.Forms
                 LoadSensorReadingsForSelectedStudent();
             };
 
-            _studentSensorWindowComboBox = new ComboBox
-            {
-                Location = new Point(995, 236),
-                Size = new Size(78, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
+            _studentSensorWindowComboBox.Items.Clear();
             _studentSensorWindowComboBox.Items.AddRange(new object[]
             {
                 "30m",
@@ -492,28 +487,12 @@ namespace UgnayDesktop.Forms
                 LoadSensorReadingsForSelectedStudent();
             };
 
-            _studentSensorAlertOnlyCheckBox = new CheckBox
-            {
-                Location = new Point(1079, 238),
-                Size = new Size(50, 28),
-                Text = "Alert",
-                AutoSize = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
             _studentSensorAlertOnlyCheckBox.CheckedChanged += (_, _) =>
             {
                 _studentSensorAlertOnly = _studentSensorAlertOnlyCheckBox.Checked;
                 LoadSensorReadingsForSelectedStudent();
             };
 
-            _studentFilterClearButton = new Button
-            {
-                Location = new Point(1116, 234),
-                Size = new Size(56, 35),
-                Text = "Clear",
-                UseVisualStyleBackColor = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
             _studentFilterClearButton.Click += (_, _) =>
             {
                 _studentSensorSearchTextBox.Text = string.Empty;
@@ -522,39 +501,22 @@ namespace UgnayDesktop.Forms
                 _studentSensorAlertOnlyCheckBox.Checked = false;
             };
 
-            Controls.Add(_studentSensorSearchTextBox);
-            Controls.Add(_studentGestureComboBox);
-            Controls.Add(_studentSensorWindowComboBox);
-            Controls.Add(_studentSensorAlertOnlyCheckBox);
-            Controls.Add(_studentFilterClearButton);
-
-            _studentSensorSearchTextBox.BringToFront();
-            _studentGestureComboBox.BringToFront();
-            _studentSensorWindowComboBox.BringToFront();
-            _studentSensorAlertOnlyCheckBox.BringToFront();
-            _studentFilterClearButton.BringToFront();
-
             _uiToolTip.SetToolTip(_studentSensorSearchTextBox, "Search readings by gesture or device.");
             _uiToolTip.SetToolTip(_studentGestureComboBox, "Filter by gesture type.");
             _uiToolTip.SetToolTip(_studentSensorWindowComboBox, "Filter by time range.");
             _uiToolTip.SetToolTip(_studentSensorAlertOnlyCheckBox, "Show only alert-condition readings.");
         }
-
         private void CreateTrendCharts()
         {
-            _studentVitalsTrendChart = CreateMiniTrendChart(new Point(775, 170), new Size(397, 28));
-            _studentConfidenceTrendChart = CreateMiniTrendChart(new Point(775, 202), new Size(397, 28));
+            _studentVitalsTrendChart = pnlStudentVitalsTrend;
+            _studentConfidenceTrendChart = pnlStudentConfidenceTrend;
 
-            Controls.Add(_studentVitalsTrendChart);
-            Controls.Add(_studentConfidenceTrendChart);
-
-            _studentVitalsTrendChart.BringToFront();
-            _studentConfidenceTrendChart.BringToFront();
+            _studentVitalsTrendChart.Paint += RenderMiniTrend;
+            _studentConfidenceTrendChart.Paint += RenderMiniTrend;
 
             _uiToolTip.SetToolTip(_studentVitalsTrendChart, "Vitals trend (HR / SpO2 / Temp), last 30 minutes.");
             _uiToolTip.SetToolTip(_studentConfidenceTrendChart, "Gesture confidence trend, last 30 minutes.");
         }
-
         private static Panel CreateMiniTrendChart(Point location, Size size)
         {
             var panel = new Panel
@@ -736,23 +698,12 @@ namespace UgnayDesktop.Forms
 
         private void CreateAlertHistoryControls()
         {
-            dgvSensorReadings.Size = new Size(760, 346);
+            _alertHistoryStatusComboBox = cmbAlertHistoryStatus;
+            _alertHistoryRefreshButton = btnAlertHistoryRefresh;
+            _alertHistoryCountLabel = lblAlertHistoryCount;
+            _alertHistoryGrid = dgvAlertHistory;
 
-            var titleLabel = new Label
-            {
-                Location = new Point(780, 525),
-                Size = new Size(118, 30),
-                Text = "Alert History",
-                Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold, GraphicsUnit.Point),
-            };
-
-            _alertHistoryStatusComboBox = new ComboBox
-            {
-                Location = new Point(900, 523),
-                Size = new Size(132, 31),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            };
+            _alertHistoryStatusComboBox.Items.Clear();
             _alertHistoryStatusComboBox.Items.AddRange(new object[]
             {
                 "All Statuses",
@@ -764,55 +715,13 @@ namespace UgnayDesktop.Forms
             _alertHistoryStatusComboBox.SelectedIndex = 0;
             _alertHistoryStatusComboBox.SelectedIndexChanged += (_, _) => LoadAlertHistory();
 
-            _alertHistoryRefreshButton = new Button
-            {
-                Location = new Point(1038, 521),
-                Size = new Size(77, 35),
-                Text = "Refresh",
-                UseVisualStyleBackColor = false,
-            };
             _alertHistoryRefreshButton.Click += (_, _) => LoadAlertHistory();
-
-            _alertHistoryCountLabel = new Label
-            {
-                Location = new Point(1121, 525),
-                Size = new Size(51, 30),
-                Text = "0",
-                TextAlign = ContentAlignment.MiddleRight,
-            };
-
-            _alertHistoryGrid = new DataGridView
-            {
-                Location = new Point(780, 561),
-                Size = new Size(392, 346),
-                ReadOnly = true,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                AllowUserToResizeRows = false,
-                MultiSelect = false,
-                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                RowHeadersVisible = false,
-                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None,
-                BorderStyle = BorderStyle.FixedSingle,
-            };
             _alertHistoryGrid.SizeChanged += (_, _) => ApplyAlertHistoryColumnVisibility();
-
-            Controls.Add(titleLabel);
-            Controls.Add(_alertHistoryStatusComboBox);
-            Controls.Add(_alertHistoryRefreshButton);
-            Controls.Add(_alertHistoryCountLabel);
-            Controls.Add(_alertHistoryGrid);
-
-            titleLabel.BringToFront();
-            _alertHistoryStatusComboBox.BringToFront();
-            _alertHistoryRefreshButton.BringToFront();
-            _alertHistoryCountLabel.BringToFront();
 
             _uiToolTip.SetToolTip(_alertHistoryStatusComboBox, "Filter alert history by status.");
             _uiToolTip.SetToolTip(_alertHistoryRefreshButton, "Refresh alert history now.");
             _uiToolTip.SetToolTip(_alertHistoryGrid, "Latest alert delivery attempts from outbox.");
         }
-
         private void LoadAlertHistory()
         {
             if (_alertHistoryGrid == null || _alertHistoryStatusComboBox == null || _alertHistoryCountLabel == null)
@@ -1182,6 +1091,7 @@ namespace UgnayDesktop.Forms
 
             dgvSensorReadings.DataSource = null;
             dgvSensorReadings.Visible = false;
+            ResetCameraPreview("Camera preview: select a student");
             UpdateTeacherKpis();
             LoadAlertHistory();
         }
@@ -1331,6 +1241,7 @@ namespace UgnayDesktop.Forms
             _selectedStudentDeviceId = student.DeviceId;
 
             lblSelectedStudent.Text = $"Selected Student: {_selectedStudentName}";
+            ResetCameraPreview("Camera preview: waiting for live preview...");
             LoadSensorReadingsForSelectedStudent();
             UpdateConnectionStatus();
 
@@ -1355,6 +1266,39 @@ namespace UgnayDesktop.Forms
 
         private void MqttService_MessageReceived(string topic, string payload)
         {
+            if (_cameraPreviewParser.IsPreviewTopic(topic))
+            {
+                if (!_cameraPreviewParser.TryParse(topic, payload, out var frame) || frame == null)
+                {
+                    AppLogger.Warning("TeacherDashboard", "Invalid camera preview payload.", eventName: "camera_preview_payload_invalid", context: new { topic, PayloadLength = payload.Length });
+                    return;
+                }
+
+                BeginInvoke(() =>
+                {
+                    if (_selectedStudentId == null || string.IsNullOrWhiteSpace(_selectedStudentDeviceId))
+                    {
+                        return;
+                    }
+
+                    if (!string.Equals(frame.DeviceId, _selectedStudentDeviceId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        UpdateCameraPreview(frame);
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Warning("TeacherDashboard", "Camera preview update failed.", ex, eventName: "camera_preview_render_failed", context: new { frame.DeviceId, frame.TimestampUtc });
+                    }
+                });
+
+                return;
+            }
+
             if (!_telemetryIngestion.IsTelemetryTopic(topic))
             {
                 return;
@@ -1389,7 +1333,6 @@ namespace UgnayDesktop.Forms
                 UpdateConnectionStatus();
             });
         }
-
         private void UpdateDecisionStatus(SensorReading reading)
         {
             var gestureQuality = _gestureQualityService.Evaluate(reading);
@@ -1435,7 +1378,7 @@ namespace UgnayDesktop.Forms
 
             lblDecisionStatus.ForeColor = color;
         }
-        
+
         private void TryQueueAlertOutbox(SensorReading reading, AlertDecision decision)
         {
             try
@@ -1459,6 +1402,7 @@ namespace UgnayDesktop.Forms
             {
                 _alertHistoryRefreshTimer.Stop();
                 _mqttService.MessageReceived -= MqttService_MessageReceived;
+                DisposeCameraPreviewImage();
                 await _mqttService.DisconnectAsync();
                 Close();
             }
@@ -1530,8 +1474,20 @@ namespace UgnayDesktop.Forms
                 MessageBox.Show($"Twilio test failed: {ex.Message}", "Twilio", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        private void TeacherDashboard_Load(object sender, EventArgs e)
+        {
+
+        }
     }
 }
+
+
+
+
+
+
+
 
 
 
