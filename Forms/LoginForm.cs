@@ -1,4 +1,4 @@
-using UgnayDesktop.Services;
+﻿using UgnayDesktop.Services;
 using UgnayDesktop.Models;
 using System.Drawing.Drawing2D;
 
@@ -13,7 +13,7 @@ public partial class LoginForm : Form
     {
         InitializeComponent();
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = ColorTranslator.FromHtml("#CABA9C");
+        BackColor = Color.White;
 
         label1.ForeColor = ColorTranslator.FromHtml("#545454");
         label2.ForeColor = ColorTranslator.FromHtml("#545454");
@@ -170,3 +170,4 @@ public partial class LoginForm : Form
 
     }
 }
+
