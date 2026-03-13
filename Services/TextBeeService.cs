@@ -99,6 +99,12 @@ public class TextBeeService
         return ExtractDeliveryReference(response.StatusCode, responseBody);
     }
 
+    public Task<string> SendOtpAsync(string toPhoneNumber, string otpCode, CancellationToken cancellationToken = default)
+    {
+        var message = $"Your Ugnay verification code is {otpCode}. It expires in 5 minutes.";
+        return SendSmsAsync(toPhoneNumber, message, cancellationToken);
+    }
+
     public Task<string> SendTestNotificationToTeacherAsync(string teacherPhoneNumber, string teacherName, CancellationToken cancellationToken = default)
     {
         var body = $"UgnayDesktop TextBee test notification for {teacherName} at {DateTime.Now:G}.";

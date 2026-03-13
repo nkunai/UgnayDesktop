@@ -32,10 +32,29 @@ public static class DbInitializer
             );
         ");
 
+        db.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS OtpChallenges (
+                Id INTEGER NOT NULL CONSTRAINT PK_OtpChallenges PRIMARY KEY AUTOINCREMENT,
+                Purpose TEXT NOT NULL,
+                Username TEXT NOT NULL,
+                PhoneNumber TEXT NOT NULL,
+                CodeHash TEXT NOT NULL,
+                CreatedAtUtc TEXT NOT NULL,
+                LastSentAtUtc TEXT NOT NULL,
+                ExpiresAtUtc TEXT NOT NULL,
+                ConsumedAtUtc TEXT NULL,
+                AttemptCount INTEGER NOT NULL DEFAULT 0,
+                ResendCount INTEGER NOT NULL DEFAULT 0,
+                PendingFullName TEXT NULL,
+                PendingPasswordHash TEXT NULL
+            );
+        ");
+
         EnsureUserTeacherPhoneColumn(db);
         EnsureUserDeviceIdColumn(db);
         EnsureUserAgeColumn(db);
         EnsureUserSexColumn(db);
+        CleanupOldOtpChallenges(db);
 
         EnsureDefaultAdminUser(db);
         EnsureDefaultTeacherUser(db);
@@ -100,6 +119,16 @@ public static class DbInitializer
     private static void EnsureUserSexColumn(AppDbContext db)
     {
         TryAlterUsersColumn(db, "ALTER TABLE Users ADD COLUMN Sex TEXT NULL;");
+    }
+
+    private static void CleanupOldOtpChallenges(AppDbContext db)
+    {
+        var cutoffUtc = DateTime.UtcNow.AddDays(-1);
+        db.Database.ExecuteSqlInterpolated($@"
+            DELETE FROM OtpChallenges
+            WHERE ExpiresAtUtc < {cutoffUtc:o}
+               OR (ConsumedAtUtc IS NOT NULL AND ConsumedAtUtc < {cutoffUtc:o});
+        ");
     }
 
     private static void TryAlterUsersColumn(AppDbContext db, string sql)

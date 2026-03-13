@@ -9,6 +9,7 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users { get; set; }
     public DbSet<SensorReading> SensorReadings { get; set; }
+    public DbSet<OtpChallenge> OtpChallenges { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
         => options.UseSqlite($"Data Source={DatabasePath}");

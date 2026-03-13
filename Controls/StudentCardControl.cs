@@ -5,12 +5,16 @@ namespace UgnayDesktop.Controls;
 
 public partial class StudentCardControl : UserControl
 {
-    public event EventHandler? CardClicked;
+    public event EventHandler? EditRequested;
+    public event EventHandler? DetailsRequested;
+    public event EventHandler? AlertRequested;
 
     public StudentCardControl()
     {
         InitializeComponent();
-        WireCardClickForwarding(this);
+        btnEdit.Click += (_, _) => EditRequested?.Invoke(this, EventArgs.Empty);
+        btnDetails.Click += (_, _) => DetailsRequested?.Invoke(this, EventArgs.Empty);
+        btnAlert.Click += (_, _) => AlertRequested?.Invoke(this, EventArgs.Empty);
     }
 
     [Browsable(true)]
@@ -77,19 +81,43 @@ public partial class StudentCardControl : UserControl
         set => lblConnectionValue.ForeColor = value;
     }
 
-    private void WireCardClickForwarding(Control root)
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string LastSeenValue
     {
-        root.Click += ForwardCardClick;
-        root.Cursor = Cursors.Hand;
-
-        foreach (Control child in root.Controls)
-        {
-            WireCardClickForwarding(child);
-        }
+        get => lblLastSeenValue.Text;
+        set => lblLastSeenValue.Text = value;
     }
 
-    private void ForwardCardClick(object? sender, EventArgs e)
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string SeverityText
     {
-        CardClicked?.Invoke(this, EventArgs.Empty);
+        get => lblSeverity.Text;
+        set => lblSeverity.Text = value;
+    }
+
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Color SeverityBackColor
+    {
+        get => lblSeverity.BackColor;
+        set => lblSeverity.BackColor = value;
+    }
+
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Color SeverityForeColor
+    {
+        get => lblSeverity.ForeColor;
+        set => lblSeverity.ForeColor = value;
+    }
+
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Color AccentColor
+    {
+        get => panelAccent.BackColor;
+        set => panelAccent.BackColor = value;
     }
 }

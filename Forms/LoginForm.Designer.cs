@@ -34,6 +34,7 @@ partial class LoginForm
         txtPassword = new TextBox();
         btnTogglePassword = new Button();
         btnLogin = new UgnayDesktop.Controls.RoundedButton();
+        btnCreateAccount = new Button();
         label3 = new Label();
         pictureBoxLogo = new PictureBox();
         ((System.ComponentModel.ISupportInitialize)pictureBoxLogo).BeginInit();
@@ -107,13 +108,24 @@ partial class LoginForm
         btnLogin.UseVisualStyleBackColor = true;
         btnLogin.Click += btnLogin_Click;
         // 
+        // btnCreateAccount
+        // 
+        btnCreateAccount.FlatStyle = FlatStyle.Flat;
+        btnCreateAccount.Location = new Point(912, 525);
+        btnCreateAccount.Name = "btnCreateAccount";
+        btnCreateAccount.Size = new Size(186, 40);
+        btnCreateAccount.TabIndex = 6;
+        btnCreateAccount.Text = "Create Account";
+        btnCreateAccount.UseVisualStyleBackColor = true;
+        btnCreateAccount.Click += btnCreateAccount_Click;
+        // 
         // label3
         // 
         label3.Font = new Font("Arial Rounded MT Bold", 35F, FontStyle.Bold);
         label3.Location = new Point(838, 93);
         label3.Name = "label3";
         label3.Size = new Size(349, 120);
-        label3.TabIndex = 6;
+        label3.TabIndex = 7;
         label3.Text = "UGNAY";
         label3.Click += label3_Click;
         // 
@@ -124,7 +136,7 @@ partial class LoginForm
         pictureBoxLogo.Name = "pictureBoxLogo";
         pictureBoxLogo.Size = new Size(680, 540);
         pictureBoxLogo.SizeMode = PictureBoxSizeMode.Zoom;
-        pictureBoxLogo.TabIndex = 7;
+        pictureBoxLogo.TabIndex = 8;
         pictureBoxLogo.TabStop = false;
         // 
         // LoginForm
@@ -134,6 +146,7 @@ partial class LoginForm
         AutoScaleMode = AutoScaleMode.Font;
         BackColor = Color.CornflowerBlue;
         ClientSize = new Size(1243, 701);
+        Controls.Add(btnCreateAccount);
         Controls.Add(btnTogglePassword);
         Controls.Add(pictureBoxLogo);
         Controls.Add(label3);
@@ -158,8 +171,7 @@ partial class LoginForm
     private TextBox txtPassword;
     private Button btnTogglePassword;
     private UgnayDesktop.Controls.RoundedButton btnLogin;
+    private Button btnCreateAccount;
     private Label label3;
     private PictureBox pictureBoxLogo;
 }
-
-
