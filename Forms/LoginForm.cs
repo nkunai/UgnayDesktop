@@ -1,45 +1,88 @@
-using UgnayDesktop.Services;
 using UgnayDesktop.Models;
-using System.Drawing.Drawing2D;
+using UgnayDesktop.Services;
 
 namespace UgnayDesktop.Forms;
 
 public partial class LoginForm : Form
 {
+    private static readonly Color PageBackgroundColor = Color.FromArgb(245, 247, 250);
+    private static readonly Color CardBackgroundColor = Color.White;
+    private static readonly Color BorderColor = Color.FromArgb(221, 226, 232);
+    private static readonly Color PrimaryTextColor = Color.FromArgb(24, 33, 45);
+    private static readonly Color SecondaryTextColor = Color.FromArgb(90, 101, 115);
+    private static readonly Color FieldBackgroundColor = Color.FromArgb(250, 251, 252);
+    private static readonly Color FieldBorderColor = Color.FromArgb(208, 215, 224);
+    private static readonly Color PrimaryButtonColor = Color.FromArgb(24, 33, 45);
+    private static readonly Color StatusErrorColor = Color.FromArgb(163, 64, 50);
+    private static readonly Color StatusInfoColor = Color.FromArgb(90, 101, 115);
+
     private bool _isPasswordVisible;
 
     public LoginForm()
     {
         InitializeComponent();
         StartPosition = FormStartPosition.CenterScreen;
-        BackColor = Color.White;
-
-        label1.ForeColor = ColorTranslator.FromHtml("#545454");
-        label2.ForeColor = ColorTranslator.FromHtml("#545454");
-
-        txtUsername.BackColor = ColorTranslator.FromHtml("#545454");
-        txtPassword.BackColor = ColorTranslator.FromHtml("#545454");
-        txtUsername.ForeColor = Color.White;
-        txtPassword.ForeColor = Color.White;
-        txtUsername.BorderStyle = BorderStyle.None;
-        txtPassword.BorderStyle = BorderStyle.None;
-        RoundTextBox(txtUsername, 12);
-        RoundTextBox(txtPassword, 12);
-        txtUsername.Resize += (_, _) => RoundTextBox(txtUsername, 12);
-        txtPassword.Resize += (_, _) => RoundTextBox(txtPassword, 12);
-
-        btnTogglePassword.BackColor = ColorTranslator.FromHtml("#D9D9D9");
-        btnTogglePassword.ForeColor = Color.Black;
-
-        btnLogin.BackColor = ColorTranslator.FromHtml("#D9D9D9");
-        btnLogin.ForeColor = Color.Black;
-        btnLogin.CornerRadius = 18;
-
-        btnCreateAccount.BackColor = Color.White;
-        btnCreateAccount.ForeColor = ColorTranslator.FromHtml("#545454");
-
+        ConfigureUi();
         SetPasswordVisibility(false);
+        ClearStatus();
         LoadLogo();
+        txtUsername.Focus();
+    }
+
+    private void ConfigureUi()
+    {
+        BackColor = PageBackgroundColor;
+
+        panelBrand.BackColor = Color.Transparent;
+        panelLoginCard.BackColor = CardBackgroundColor;
+        panelLoginCard.ForeColor = PrimaryTextColor;
+        panelLoginCard.BorderStyle = BorderStyle.FixedSingle;
+
+        lblBrandTitle.ForeColor = PrimaryTextColor;
+        lblBrandBody.ForeColor = SecondaryTextColor;
+        lblBrandFooter.ForeColor = SecondaryTextColor;
+        lblCardEyebrow.ForeColor = SecondaryTextColor;
+        lblCardTitle.ForeColor = PrimaryTextColor;
+        lblCardBody.ForeColor = SecondaryTextColor;
+        lblUsername.ForeColor = SecondaryTextColor;
+        lblPassword.ForeColor = SecondaryTextColor;
+
+        ConfigureTextBox(txtUsername, "Username");
+        ConfigureTextBox(txtPassword, "Password");
+
+        btnTogglePassword.BackColor = CardBackgroundColor;
+        btnTogglePassword.ForeColor = SecondaryTextColor;
+        btnTogglePassword.FlatAppearance.BorderColor = FieldBorderColor;
+        btnTogglePassword.FlatAppearance.MouseDownBackColor = Color.FromArgb(238, 241, 245);
+        btnTogglePassword.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 246, 248);
+        btnTogglePassword.AccessibleName = "Show or hide password";
+
+        btnLogin.BackColor = PrimaryButtonColor;
+        btnLogin.ForeColor = Color.White;
+        btnLogin.CornerRadius = 16;
+        btnLogin.AccessibleName = "Login";
+
+        btnCreateAccount.BackColor = CardBackgroundColor;
+        btnCreateAccount.ForeColor = SecondaryTextColor;
+        btnCreateAccount.FlatAppearance.BorderColor = BorderColor;
+        btnCreateAccount.FlatAppearance.MouseDownBackColor = Color.FromArgb(238, 241, 245);
+        btnCreateAccount.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 246, 248);
+        btnCreateAccount.AccessibleName = "Create account";
+
+        lblStatus.AutoEllipsis = true;
+        lblStatus.ForeColor = SecondaryTextColor;
+        lblStatus.Visible = false;
+
+        txtUsername.AccessibleName = "Username";
+        txtPassword.AccessibleName = "Password";
+    }
+
+    private void ConfigureTextBox(TextBox textBox, string accessibleName)
+    {
+        textBox.BackColor = FieldBackgroundColor;
+        textBox.ForeColor = PrimaryTextColor;
+        textBox.BorderStyle = BorderStyle.FixedSingle;
+        textBox.AccessibleName = accessibleName;
     }
 
     private void SetPasswordVisibility(bool visible)
@@ -54,6 +97,7 @@ public partial class LoginForm : Form
         string logoPath = Path.Combine(AppContext.BaseDirectory, "Assets", "Images", "UgnayLogo.png");
         if (!File.Exists(logoPath))
         {
+            pictureBoxLogo.Visible = false;
             return;
         }
 
@@ -61,38 +105,48 @@ public partial class LoginForm : Form
         using var image = Image.FromStream(stream);
         pictureBoxLogo.Image?.Dispose();
         pictureBoxLogo.Image = new Bitmap(image);
-    }
-
-    private void label1_Click(object sender, EventArgs e)
-    {
-    }
-
-    private void label3_Click(object sender, EventArgs e)
-    {
+        pictureBoxLogo.Visible = true;
     }
 
     private async void btnLogin_Click(object sender, EventArgs e)
     {
+        if (!ValidateCredentials())
+        {
+            return;
+        }
+
         SetLoginBusy(true);
         try
         {
             var auth = new AuthService();
-            var result = await auth.BeginLoginAsync(txtUsername.Text, txtPassword.Text);
+            var result = await auth.BeginLoginAsync(txtUsername.Text.Trim(), txtPassword.Text);
 
-            if (result.Status == AuthLoginStatus.InvalidCredentials || result.Status == AuthLoginStatus.Blocked || result.Status == AuthLoginStatus.Error)
+            if (result.Status == AuthLoginStatus.InvalidCredentials)
             {
-                MessageBox.Show(result.Message, "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                ShowStatus(result.Message, true);
+                txtPassword.Focus();
+                txtPassword.SelectAll();
+                return;
+            }
+
+            if (result.Status == AuthLoginStatus.Blocked || result.Status == AuthLoginStatus.Error)
+            {
+                ShowStatus(result.Message, true);
+                txtUsername.Focus();
+                txtUsername.SelectAll();
                 return;
             }
 
             if (result.Status == AuthLoginStatus.Authenticated && result.User != null)
             {
+                ClearStatus();
                 OpenDashboard(result.User);
                 return;
             }
 
             if (result.Status == AuthLoginStatus.OtpRequired && result.ChallengeId != null && result.ExpiresAtUtc != null && result.ResendAvailableAtUtc != null)
             {
+                ClearStatus();
                 User? authenticatedTeacher = null;
                 using var otpDialog = new OtpVerificationDialog(
                     "Teacher Sign-In OTP",
@@ -119,12 +173,41 @@ public partial class LoginForm : Form
                 return;
             }
 
-            MessageBox.Show("Login could not continue.", "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ShowStatus("Login could not continue.", true);
         }
         finally
         {
             SetLoginBusy(false);
         }
+    }
+
+    private bool ValidateCredentials()
+    {
+        var username = txtUsername.Text.Trim();
+        var password = txtPassword.Text;
+
+        if (string.IsNullOrWhiteSpace(username) && string.IsNullOrWhiteSpace(password))
+        {
+            ShowStatus("Enter your username and password to continue.", true);
+            txtUsername.Focus();
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            ShowStatus("Enter your username.", true);
+            txtUsername.Focus();
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            ShowStatus("Enter your password.", true);
+            txtPassword.Focus();
+            return false;
+        }
+
+        return true;
     }
 
     private void OpenDashboard(User user)
@@ -159,8 +242,11 @@ public partial class LoginForm : Form
         txtUsername.Clear();
         txtPassword.Clear();
         SetPasswordVisibility(false);
+        ClearStatus();
+        SetLoginBusy(false);
         Show();
         Activate();
+        txtUsername.Focus();
     }
 
     private void btnTogglePassword_Click(object sender, EventArgs e)
@@ -178,35 +264,31 @@ public partial class LoginForm : Form
 
         txtUsername.Text = dialog.CreatedUsername;
         txtPassword.Clear();
+        ClearStatus();
         txtUsername.Focus();
         SetPasswordVisibility(false);
     }
 
-    private void txtPassword_TextChanged(object sender, EventArgs e)
+    private void txtInput_TextChanged(object sender, EventArgs e)
     {
+        ClearStatus();
     }
 
     private void LoginForm_Load(object sender, EventArgs e)
     {
     }
 
-    private static void RoundTextBox(TextBox textBox, int radius)
+    private void ShowStatus(string message, bool isError)
     {
-        var path = new GraphicsPath();
-        int diameter = radius * 2;
-
-        path.AddArc(0, 0, diameter, diameter, 180, 90);
-        path.AddArc(textBox.Width - diameter, 0, diameter, diameter, 270, 90);
-        path.AddArc(textBox.Width - diameter, textBox.Height - diameter, diameter, diameter, 0, 90);
-        path.AddArc(0, textBox.Height - diameter, diameter, diameter, 90, 90);
-        path.CloseFigure();
-
-        textBox.Region?.Dispose();
-        textBox.Region = new Region(path);
+        lblStatus.Text = message;
+        lblStatus.ForeColor = isError ? StatusErrorColor : StatusInfoColor;
+        lblStatus.Visible = true;
     }
 
-    private void label2_Click(object sender, EventArgs e)
+    private void ClearStatus()
     {
+        lblStatus.Text = string.Empty;
+        lblStatus.Visible = false;
     }
 
     private void SetLoginBusy(bool busy)
@@ -216,6 +298,13 @@ public partial class LoginForm : Form
         txtUsername.Enabled = !busy;
         txtPassword.Enabled = !busy;
         btnTogglePassword.Enabled = !busy;
+        btnLogin.Text = busy ? "Signing In..." : "Login";
+
+        if (busy)
+        {
+            ShowStatus("Checking your credentials...", false);
+        }
+
         UseWaitCursor = busy;
     }
 }
