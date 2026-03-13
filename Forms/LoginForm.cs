@@ -6,7 +6,6 @@ namespace UgnayDesktop.Forms;
 
 public partial class LoginForm : Form
 {
-
     private bool _isPasswordVisible;
 
     public LoginForm()
@@ -35,6 +34,10 @@ public partial class LoginForm : Form
         btnLogin.BackColor = ColorTranslator.FromHtml("#D9D9D9");
         btnLogin.ForeColor = Color.Black;
         btnLogin.CornerRadius = 18;
+
+        btnCreateAccount.BackColor = Color.White;
+        btnCreateAccount.ForeColor = ColorTranslator.FromHtml("#545454");
+
         SetPasswordVisibility(false);
         LoadLogo();
     }
@@ -62,35 +65,77 @@ public partial class LoginForm : Form
 
     private void label1_Click(object sender, EventArgs e)
     {
-
     }
 
     private void label3_Click(object sender, EventArgs e)
     {
-
     }
 
-    private void btnLogin_Click(object sender, EventArgs e)
+    private async void btnLogin_Click(object sender, EventArgs e)
     {
-        var username = txtUsername.Text.Trim();
-        var password = txtPassword.Text.Trim();
-        var auth = new AuthService();
-        var user = auth.Login(username, password);
-
-        if (user == null)
+        SetLoginBusy(true);
+        try
         {
-            MessageBox.Show("Invalid username or password", "Login Failed",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
+            var auth = new AuthService();
+            var result = await auth.BeginLoginAsync(txtUsername.Text, txtPassword.Text);
 
+            if (result.Status == AuthLoginStatus.InvalidCredentials || result.Status == AuthLoginStatus.Blocked || result.Status == AuthLoginStatus.Error)
+            {
+                MessageBox.Show(result.Message, "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (result.Status == AuthLoginStatus.Authenticated && result.User != null)
+            {
+                OpenDashboard(result.User);
+                return;
+            }
+
+            if (result.Status == AuthLoginStatus.OtpRequired && result.ChallengeId != null && result.ExpiresAtUtc != null && result.ResendAvailableAtUtc != null)
+            {
+                User? authenticatedTeacher = null;
+                using var otpDialog = new OtpVerificationDialog(
+                    "Teacher Sign-In OTP",
+                    $"We sent an OTP to {result.MaskedPhoneNumber ?? "your phone"}. Enter it below to finish signing in.",
+                    result.ExpiresAtUtc.Value,
+                    result.ResendAvailableAtUtc.Value,
+                    code =>
+                    {
+                        var complete = auth.CompleteTeacherLoginOtp(result.ChallengeId.Value, code);
+                        if (complete.Success)
+                        {
+                            authenticatedTeacher = complete.User;
+                        }
+
+                        return Task.FromResult((complete.Success, complete.Message));
+                    },
+                    () => auth.ResendTeacherLoginOtpAsync(result.ChallengeId.Value));
+
+                if (otpDialog.ShowDialog(this) == DialogResult.OK && authenticatedTeacher != null)
+                {
+                    OpenDashboard(authenticatedTeacher);
+                }
+
+                return;
+            }
+
+            MessageBox.Show("Login could not continue.", "Login", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            SetLoginBusy(false);
+        }
+    }
+
+    private void OpenDashboard(User user)
+    {
         Form dashboard;
 
-        if (user.Role == "Admin")
+        if (string.Equals(user.Role, "Admin", StringComparison.OrdinalIgnoreCase))
         {
             dashboard = new AdminDashboard(user);
         }
-        else if (user.Role == "Teacher")
+        else if (string.Equals(user.Role, "Teacher", StringComparison.OrdinalIgnoreCase))
         {
             dashboard = new TeacherDashboard(user);
         }
@@ -123,14 +168,26 @@ public partial class LoginForm : Form
         SetPasswordVisibility(!_isPasswordVisible);
     }
 
+    private void btnCreateAccount_Click(object sender, EventArgs e)
+    {
+        using var dialog = new TeacherCreateAccountDialog();
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        txtUsername.Text = dialog.CreatedUsername;
+        txtPassword.Clear();
+        txtUsername.Focus();
+        SetPasswordVisibility(false);
+    }
+
     private void txtPassword_TextChanged(object sender, EventArgs e)
     {
-
     }
 
     private void LoginForm_Load(object sender, EventArgs e)
     {
-
     }
 
     private static void RoundTextBox(TextBox textBox, int radius)
@@ -150,8 +207,15 @@ public partial class LoginForm : Form
 
     private void label2_Click(object sender, EventArgs e)
     {
+    }
 
+    private void SetLoginBusy(bool busy)
+    {
+        btnLogin.Enabled = !busy;
+        btnCreateAccount.Enabled = !busy;
+        txtUsername.Enabled = !busy;
+        txtPassword.Enabled = !busy;
+        btnTogglePassword.Enabled = !busy;
+        UseWaitCursor = busy;
     }
 }
-
-
