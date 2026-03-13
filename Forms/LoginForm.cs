@@ -22,6 +22,7 @@ public partial class LoginForm : Form
     {
         InitializeComponent();
         StartPosition = FormStartPosition.CenterScreen;
+        KeyPreview = true;
         ConfigureUi();
         SetPasswordVisibility(false);
         ClearStatus();
@@ -50,17 +51,35 @@ public partial class LoginForm : Form
         ConfigureTextBox(txtUsername, "Username");
         ConfigureTextBox(txtPassword, "Password");
 
+        tableLayoutRoot.TabStop = false;
+        layoutLoginCard.TabStop = false;
+        panelBrand.TabStop = false;
+        panelLoginCard.TabStop = false;
+        panelPasswordRow.TabStop = false;
+        lblBrandTitle.TabStop = false;
+        lblBrandBody.TabStop = false;
+        lblBrandFooter.TabStop = false;
+        lblCardEyebrow.TabStop = false;
+        lblCardTitle.TabStop = false;
+        lblCardBody.TabStop = false;
+        lblUsername.TabStop = false;
+        lblPassword.TabStop = false;
+        lblStatus.TabStop = false;
+        pictureBoxLogo.TabStop = false;
+
         btnTogglePassword.BackColor = CardBackgroundColor;
         btnTogglePassword.ForeColor = SecondaryTextColor;
         btnTogglePassword.FlatAppearance.BorderColor = FieldBorderColor;
         btnTogglePassword.FlatAppearance.MouseDownBackColor = Color.FromArgb(238, 241, 245);
         btnTogglePassword.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 246, 248);
         btnTogglePassword.AccessibleName = "Show or hide password";
+        btnTogglePassword.TabStop = false;
 
         btnLogin.BackColor = PrimaryButtonColor;
         btnLogin.ForeColor = Color.White;
         btnLogin.CornerRadius = 16;
         btnLogin.AccessibleName = "Login";
+        btnLogin.TabStop = false;
 
         btnCreateAccount.BackColor = CardBackgroundColor;
         btnCreateAccount.ForeColor = SecondaryTextColor;
@@ -68,6 +87,7 @@ public partial class LoginForm : Form
         btnCreateAccount.FlatAppearance.MouseDownBackColor = Color.FromArgb(238, 241, 245);
         btnCreateAccount.FlatAppearance.MouseOverBackColor = Color.FromArgb(244, 246, 248);
         btnCreateAccount.AccessibleName = "Create account";
+        btnCreateAccount.TabStop = false;
 
         lblStatus.AutoEllipsis = true;
         lblStatus.ForeColor = SecondaryTextColor;
@@ -75,6 +95,37 @@ public partial class LoginForm : Form
 
         txtUsername.AccessibleName = "Username";
         txtPassword.AccessibleName = "Password";
+        txtUsername.TabIndex = 0;
+        txtPassword.TabIndex = 1;
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.Tab || keyData == (Keys.Tab | Keys.Shift))
+        {
+            if (ActiveControl == txtPassword)
+            {
+                txtUsername.Focus();
+            }
+            else
+            {
+                txtPassword.Focus();
+            }
+
+            return true;
+        }
+
+        if (keyData == Keys.Enter)
+        {
+            if (btnLogin.Enabled)
+            {
+                btnLogin.PerformClick();
+            }
+
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     private void ConfigureTextBox(TextBox textBox, string accessibleName)

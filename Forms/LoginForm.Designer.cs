@@ -356,3 +356,5 @@ partial class LoginForm
     private UgnayDesktop.Controls.RoundedButton btnLogin;
     private Button btnCreateAccount;
 }
+
+
