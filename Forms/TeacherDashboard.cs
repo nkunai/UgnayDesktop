@@ -1,11 +1,9 @@
+using System;
+using System.Linq;
+using System.Windows.Forms;
 using UgnayDesktop.Data;
 using UgnayDesktop.Models;
 using UgnayDesktop.Services;
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
 
 namespace UgnayDesktop.Forms
 {
@@ -21,58 +19,53 @@ namespace UgnayDesktop.Forms
             StartPosition = FormStartPosition.CenterScreen;
             _currentTeacher = currentTeacher;
             UdpSensorListener.Shared.SensorReadingReceived += SensorListener_SensorReadingReceived;
+            FormClosed += TeacherDashboard_FormClosed;
+            ConfigureDashboardUi();
+            ConfigureStudentEntryUi();
             LoadCurrentTeacherProfile();
             LoadStudents();
-            UpdateTeacherPhoneLabel();
-            ConfigureStudentEntryUi();
+        }
+
+        private void TeacherDashboard_FormClosed(object? sender, FormClosedEventArgs e)
+        {
+            UdpSensorListener.Shared.SensorReadingReceived -= SensorListener_SensorReadingReceived;
+        }
+
+        private void ConfigureDashboardUi()
+        {
+            cmbStudentFilter.Items.Clear();
+            cmbStudentFilter.Items.AddRange(new object[]
+            {
+                "All Students",
+                "Connected",
+                "Disconnected",
+                "Needs Attention"
+            });
+            cmbStudentFilter.SelectedIndex = 0;
+
+            cmbStudentSort.Items.Clear();
+            cmbStudentSort.Items.AddRange(new object[]
+            {
+                "Severity Then Name",
+                "Name",
+                "Connection Status"
+            });
+            cmbStudentSort.SelectedIndex = 0;
         }
 
         private void LoadCurrentTeacherProfile()
         {
-            txtTeacherFullName.Text = _currentTeacher.FullName;
-            txtTeacherPhoneSuffix.Text = ExtractPhPhoneDigitsAfterCountryCode(_currentTeacher.TeacherPhoneNumber);
-        }
-
-        private static string ExtractPhPhoneDigitsAfterCountryCode(string? phoneNumber)
-        {
-            if (string.IsNullOrWhiteSpace(phoneNumber))
-            {
-                return string.Empty;
-            }
-
-            var rawDigits = new string(phoneNumber.Where(char.IsDigit).ToArray());
-
-            if (rawDigits.StartsWith("63", StringComparison.Ordinal))
-            {
-                rawDigits = rawDigits.Substring(2);
-            }
-            else if (rawDigits.StartsWith("0", StringComparison.Ordinal))
-            {
-                rawDigits = rawDigits.Substring(1);
-            }
-
-            if (rawDigits.Length > 10)
-            {
-                rawDigits = rawDigits.Substring(rawDigits.Length - 10);
-            }
-
-            return rawDigits;
-        }
-
-        private void txtTeacherPhoneSuffix_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar))
-            {
-                e.Handled = true;
-            }
+            lblTeacherNameValue.Text = string.IsNullOrWhiteSpace(_currentTeacher.FullName)
+                ? "Teacher"
+                : _currentTeacher.FullName;
+            UpdateTeacherPhoneLabel();
         }
 
         private void UpdateTeacherPhoneLabel()
         {
-            var phone = string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber)
-                ? "not set"
+            lblTeacherPhone.Text = string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber)
+                ? "Not set"
                 : _currentTeacher.TeacherPhoneNumber;
-            lblTeacherPhone.Text = $"Teacher Phone: {phone}";
         }
 
         private void LoadStudents()
@@ -90,10 +83,9 @@ namespace UgnayDesktop.Forms
 
         private void btnSaveProfile_Click(object sender, EventArgs e)
         {
-            var currentFullName = _currentTeacher.FullName;
             var currentPhoneDigits = ExtractPhPhoneDigitsAfterCountryCode(_currentTeacher.TeacherPhoneNumber);
 
-            using var dialog = new EditTeacherProfileDialog(currentFullName, currentPhoneDigits);
+            using var dialog = new EditTeacherProfileDialog(_currentTeacher.FullName, currentPhoneDigits);
             if (dialog.ShowDialog(this) != DialogResult.OK)
             {
                 return;
@@ -109,22 +101,45 @@ namespace UgnayDesktop.Forms
 
             teacher.FullName = dialog.TeacherFullName;
             teacher.TeacherPhoneNumber = dialog.NormalizedPhoneNumber;
-
             db.SaveChanges();
 
             _currentTeacher.FullName = teacher.FullName;
             _currentTeacher.TeacherPhoneNumber = teacher.TeacherPhoneNumber;
 
             LoadCurrentTeacherProfile();
-            UpdateTeacherPhoneLabel();
             MessageBox.Show("Profile updated successfully.", "Profile", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private static string ExtractPhPhoneDigitsAfterCountryCode(string? phoneNumber)
+        {
+            if (string.IsNullOrWhiteSpace(phoneNumber))
+            {
+                return string.Empty;
+            }
+
+            var rawDigits = new string(phoneNumber.Where(char.IsDigit).ToArray());
+
+            if (rawDigits.StartsWith("63", StringComparison.Ordinal))
+            {
+                rawDigits = rawDigits[2..];
+            }
+            else if (rawDigits.StartsWith("0", StringComparison.Ordinal))
+            {
+                rawDigits = rawDigits[1..];
+            }
+
+            if (rawDigits.Length > 10)
+            {
+                rawDigits = rawDigits[^10..];
+            }
+
+            return rawDigits;
         }
 
         private void ConfigureStudentEntryUi()
         {
             lblStudentHeader.Text = "Student Cards";
             btnAddStudent.Text = "Add Student";
-
             InitializeStudentCardsUi();
         }
 
@@ -163,14 +178,12 @@ namespace UgnayDesktop.Forms
             db.SaveChanges();
 
             LoadStudents();
-
             MessageBox.Show($"Student added. Assigned device ID: {deviceId}", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private static string BuildUniqueStudentUsername(AppDbContext db, string fullName)
         {
-            var raw = new string(fullName.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c)).ToArray());
-
+            var raw = new string(fullName.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
             var baseName = string.IsNullOrWhiteSpace(raw) ? "student" : raw;
             var candidate = $"{baseName}_student";
             var suffix = 1;
@@ -186,7 +199,7 @@ namespace UgnayDesktop.Forms
 
         private static string BuildStudentDeviceId(string fullName)
         {
-            var clean = new string(fullName.ToLowerInvariant().Where(c => char.IsLetterOrDigit(c)).ToArray());
+            var clean = new string(fullName.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
             if (string.IsNullOrWhiteSpace(clean))
             {
                 clean = "student";
@@ -203,69 +216,63 @@ namespace UgnayDesktop.Forms
                 return;
             }
 
-            BeginInvoke(() =>
-            {
-                UpdateStudentCardFromReading(reading);
-            });
+            BeginInvoke(() => UpdateStudentCardFromReading(reading));
         }
 
         private void btnLogout_Click(object sender, EventArgs e)
         {
             var confirm = MessageBox.Show("Are you sure you want to log out?", "Logout", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
             if (confirm == DialogResult.Yes)
             {
-                UdpSensorListener.Shared.SensorReadingReceived -= SensorListener_SensorReadingReceived;
                 Close();
             }
         }
 
-        private async void btnBpmAlert_Click(object sender, EventArgs e)
-        {
-            await SendManualAlertAsync(btnBpmAlert, txtBpmAlertMessage, "BPM Alert");
-        }
-        private async void btnSweatnessAlert_Click(object sender, EventArgs e)
-        {
-            await SendManualAlertAsync(btnSweatnessAlert, txtSweatnessAlertMessage, "Sweatness Alert");
-        }
-        private async void btnTemperatureAlert_Click(object sender, EventArgs e)
-        {
-            await SendManualAlertAsync(btnTemperatureAlert, txtTemperatureAlertMessage, "Temperature Alert");
-        }
-        private async Task SendManualAlertAsync(Button alertButton, TextBox messageTextBox, string alertName)
+        private async Task SendTeacherAlertAsync(string alertName, string message)
         {
             if (string.IsNullOrWhiteSpace(_currentTeacher.TeacherPhoneNumber))
             {
                 MessageBox.Show("Teacher phone number is not set. Update your profile first.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
+
             var missing = _textBeeService.GetMissingConfigKeys();
             if (missing.Count > 0)
             {
                 MessageBox.Show("TextBee is not configured. Missing: " + string.Join(", ", missing), "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            var message = messageTextBox.Text.Trim();
+
             if (string.IsNullOrWhiteSpace(message))
             {
                 MessageBox.Show($"{alertName} message cannot be empty.", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                messageTextBox.Focus();
                 return;
             }
-            alertButton.Enabled = false;
+
             try
             {
-                var reference = await _textBeeService.SendSmsAsync(_currentTeacher.TeacherPhoneNumber, message);
+                var reference = await _textBeeService.SendSmsAsync(_currentTeacher.TeacherPhoneNumber, message.Trim());
                 MessageBox.Show($"{alertName} SMS sent successfully. Reference: {reference}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"{alertName} SMS failed: {ex.Message}", "TextBee", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            finally
-            {
-                alertButton.Enabled = true;
-            }
+        }
+
+        private void txtStudentSearch_TextChanged(object? sender, EventArgs e)
+        {
+            ApplyStudentCardFiltersAndSummary();
+        }
+
+        private void cmbStudentFilter_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            ApplyStudentCardFiltersAndSummary();
+        }
+
+        private void cmbStudentSort_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            ApplyStudentCardFiltersAndSummary();
         }
     }
 }
